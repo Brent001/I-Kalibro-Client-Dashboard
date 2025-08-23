@@ -1,4 +1,4 @@
-# 📚 i/Kalibro Admin Portal
+# 📚 i/Kalibro Client Portal
 
 A modern, full-featured **Smart Library Management System** built with [SvelteKit](https://kit.svelte.dev/) and [Tailwind CSS](https://tailwindcss.com/).  
 Designed for **Metro Dagupan Colleges** to streamline library operations, manage members, and gain actionable insights.
