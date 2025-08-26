@@ -42,8 +42,9 @@ Designed for **Metro Dagupan Colleges** to streamline library operations, manage
 ```
 src/
   lib/           # Reusable UI components
+  lib/server/    # Server DB Components
   routes/        # SvelteKit routes (pages & API)
-  server/        # Database & server logic
+  /routes/api    # API endpoints
   app.css        # Global styles (Tailwind + custom)
 ```
 
