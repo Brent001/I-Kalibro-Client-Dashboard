@@ -1,11 +1,8 @@
 <script lang="ts">
-  import { onMount, createEventDispatcher } from 'svelte';
-
   let showPassword = false;
   let username = '';
   let password = '';
   let errorMsg = '';
-  const dispatch = createEventDispatcher();
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
@@ -19,8 +16,7 @@
         });
         const data = await res.json();
         if (data.success) {
-          // Optionally: redirect or reload
-          window.location.href = '/dashboard'; // or your dashboard route
+          window.location.href = '/dashboard';
         } else {
           errorMsg = data.message || 'Login failed';
         }
@@ -35,169 +31,152 @@
   <title>Login | i/Kalibro Admin Portal</title>
 </svelte:head>
 
-<!-- Main Layout -->
-<div class="min-h-screen flex">
-  <!-- Left side - Login Form -->
-  <div class="flex-1 flex items-center justify-center px-4 sm:px-6 lg:px-8">
-    <div class="max-w-md w-full space-y-8">
-      <div class="text-center">
-        <div class="mx-auto h-16 w-16 bg-slate-900 rounded-full flex items-center justify-center">
-          <!-- Updated BookOpen SVG to match layout.svelte -->
-          <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-            <circle cx="12" cy="12" r="2"/>
-          </svg>
+<!-- Notion-Inspired Design -->
+<div class="min-h-screen bg-white flex">
+  <!-- Left Panel -->
+  <div class="hidden lg:flex lg:w-2/5 bg-slate-900 text-white flex-col justify-center p-12">
+    <div class="max-w-sm">
+      <div class="mb-12">
+        <div class="flex items-center mb-6">
+          <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mr-3">
+            <svg class="h-6 w-6 text-slate-900" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+              <circle cx="12" cy="12" r="2"/>
+            </svg>
+          </div>
+          <h1 class="text-2xl font-medium">i/Kalibro</h1>
         </div>
-        <h2 class="mt-6 text-3xl font-bold text-gray-900">
-          i/Kalibro Admin Portal
-        </h2>
-        <p class="mt-2 text-sm text-gray-600">
-          Smart Library Management System
-        </p>
-        <p class="text-xs text-gray-500">
-          Metro Dagupan Colleges
-        </p>
+        <h2 class="text-3xl font-medium mb-4 leading-tight">Welcome to the Library Client Portal</h2>
+        <p class="text-slate-300 text-lg leading-relaxed">Access your borrowed books, manage your account, and explore the library collection.</p>
       </div>
 
-      <form class="mt-8 space-y-6" on:submit|preventDefault={handleSubmit}>
-        <div class="space-y-4">
-          <div>
-            <label for="username" class="block text-sm font-medium text-gray-700">
-              Username
-            </label>
-            <input
-              id="username"
-              name="username"
-              type="text"
-              required
-              bind:value={username}
-              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-slate-500 focus:border-slate-500"
-              placeholder="Enter your username"
-            />
+      <div class="space-y-6">
+        <div class="flex items-start space-x-3">
+          <div class="w-6 h-6 bg-slate-700 rounded-md flex items-center justify-center mt-1">
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+            </svg>
           </div>
           <div>
-            <label for="password" class="block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <div class="mt-1 relative">
-              <input
-                id="password"
-                name="password"
-                type={showPassword ? 'text' : 'password'}
-                required
-                bind:value={password}
-                class="block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-slate-500 focus:border-slate-500"
-                placeholder="Enter your password"
-              />
-              <button
-                type="button"
-                class="absolute inset-y-0 right-0 pr-3 flex items-center"
-                on:click={() => showPassword = !showPassword}
-                tabindex="-1"
-              >
+            <h3 class="font-medium mb-1">View Borrowed Books</h3>
+            <p class="text-sm text-slate-300">See your current and past loans in one place</p>
+          </div>
+        </div>
+        
+        <div class="flex items-start space-x-3">
+          <div class="w-6 h-6 bg-slate-700 rounded-md flex items-center justify-center mt-1">
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="font-medium mb-1">Update Your Profile</h3>
+            <p class="text-sm text-slate-300">Keep your contact information up to date</p>
+          </div>
+        </div>
+        
+        <div class="flex items-start space-x-3">
+          <div class="w-6 h-6 bg-slate-700 rounded-md flex items-center justify-center mt-1">
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="font-medium mb-1">Explore Library Collection</h3>
+            <p class="text-sm text-slate-300">Search and discover new books and resources</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Panel -->
+  <div class="flex-1 flex items-center justify-center p-6 lg:p-12">
+    <div class="w-full max-w-sm">
+      <!-- Mobile Header -->
+      <div class="lg:hidden text-center mb-10">
+        <div class="flex items-center justify-center mb-4">
+          <div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center mr-2">
+            <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+              <circle cx="12" cy="12" r="2"/>
+            </svg>
+          </div>
+          <h1 class="text-xl font-medium text-slate-900">i/Kalibro</h1>
+        </div>
+        <p class="text-slate-600">Metro Dagupan Colleges</p>
+      </div>
+
+      <div class="mb-10">
+        <h2 class="text-3xl font-medium text-slate-900 mb-3">Log in</h2>
+        <p class="text-slate-600">Welcome back! Please enter your details.</p>
+      </div>
+
+      <form class="space-y-5" on:submit|preventDefault={handleSubmit}>
+        <div>
+          <label class="block text-sm font-medium text-slate-900 mb-2">Username</label>
+          <input
+            id="username"
+            type="text"
+            required
+            bind:value={username}
+            class="w-full px-3 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent text-base transition-all placeholder-slate-400"
+            placeholder="Enter your username"
+          />
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-slate-900 mb-2">Password</label>
+          <div class="relative">
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              required
+              bind:value={password}
+              class="w-full px-3 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent text-base transition-all placeholder-slate-400 pr-10"
+              placeholder="Enter your password"
+            />
+            <button
+              type="button"
+              class="absolute right-3 top-1/2 transform -translate-y-1/2"
+              on:click={() => showPassword = !showPassword}
+            >
+              <svg class="h-5 w-5 text-slate-400 hover:text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 {#if showPassword}
-                  <!-- EyeOff SVG -->
-                  <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M17.94 17.94A10.94 10.94 0 0112 19c-5 0-9.27-3.11-10.94-7.5a10.97 10.97 0 012.92-4.19M1 1l22 22" />
-                    <path d="M9.53 9.53A3.5 3.5 0 0012 15.5a3.5 3.5 0 003.5-3.5c0-.88-.32-1.69-.85-2.32" />
-                  </svg>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21"/>
                 {:else}
-                  <!-- Eye SVG -->
-                  <svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                 {/if}
-              </button>
-            </div>
+              </svg>
+            </button>
           </div>
         </div>
 
         {#if errorMsg}
-          <div class="text-red-600 text-sm mb-2">{errorMsg}</div>
+          <div class="text-red-600 text-sm">{errorMsg}</div>
         {/if}
 
         <div class="flex items-center justify-between">
-          <div class="flex items-center">
-            <input
-              id="remember-me"
-              name="remember-me"
-              type="checkbox"
-              class="h-4 w-4 text-slate-600 focus:ring-slate-500 border-gray-300 rounded"
-            />
-            <label for="remember-me" class="ml-2 block text-sm text-gray-900">
-              Remember me
-            </label>
-          </div>
-          <div class="text-sm">
-            <a href="#" class="font-medium text-slate-600 hover:text-slate-500">
-              Forgot password?
-            </a>
-          </div>
+          <label class="flex items-center text-sm text-slate-600">
+            <input type="checkbox" class="rounded border-slate-300 text-slate-900 mr-2" />
+            Remember for 30 days
+          </label>
+          <a href="#" class="text-sm text-slate-600 hover:text-slate-900">Forgot password</a>
         </div>
 
-        <div>
-          <button
-            type="submit"
-            class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-slate-900 hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition duration-150 ease-in-out"
-          >
-            Sign in to Dashboard
-          </button>
+        <button
+          type="submit"
+          class="w-full bg-slate-900 text-white py-3 rounded-lg hover:bg-slate-800 transition-colors font-medium text-base"
+        >
+          Sign in
+        </button>
+        <!-- Add Register/Create Account Link -->
+        <div class="mt-4 text-center">
+          <span class="text-slate-600 text-sm">Don't have an account?</span>
+          <a href="/register" class="ml-2 text-slate-900 font-medium hover:underline">Create Account</a>
         </div>
       </form>
-    </div>
-  </div>
-
-  <!-- Right side - Feature showcase with solid background -->
-  <div class="hidden lg:block lg:flex-1 relative bg-slate-900">
-    <!-- Content overlay -->
-    <div class="relative flex flex-col justify-center items-center h-full p-12 text-white z-10">
-      <div class="max-w-md text-center">
-        <h1 class="text-4xl font-bold mb-6">
-          Smart Library Management
-        </h1>
-        <p class="text-xl mb-8 text-slate-200">
-          Streamline your library operations with our comprehensive management system
-        </p>
-        <div class="space-y-6">
-          <div class="flex items-center space-x-4">
-            <div class="bg-white bg-opacity-30 p-3 rounded-full">
-              <!-- Library/Database Icon -->
-              <svg class="h-6 w-6 text-slate-900" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/>
-              </svg>
-            </div>
-            <div class="text-left">
-              <h3 class="font-semibold">Book Management</h3>
-              <p class="text-sm text-slate-300">Organize and track your entire collection</p>
-            </div>
-          </div>
-          <div class="flex items-center space-x-4">
-            <div class="bg-white bg-opacity-30 p-3 rounded-full">
-              <!-- ID Card/Badge Icon -->
-              <svg class="h-6 w-6 text-slate-900" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"/>
-              </svg>
-            </div>
-            <div class="text-left">
-              <h3 class="font-semibold">Member Management</h3>
-              <p class="text-sm text-slate-300">Manage students and faculty accounts</p>
-            </div>
-          </div>
-          <div class="flex items-center space-x-4">
-            <div class="bg-white bg-opacity-30 p-3 rounded-full">
-              <!-- Chart/Analytics Icon -->
-              <svg class="h-6 w-6 text-slate-900" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-              </svg>
-            </div>
-            <div class="text-left">
-              <h3 class="font-semibold">Analytics & Reports</h3>
-              <p class="text-sm text-slate-300">Insights to optimize library operations</p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </div>
