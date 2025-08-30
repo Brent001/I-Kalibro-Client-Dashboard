@@ -182,9 +182,14 @@
   async function processQRCode(content: string) {
     errorMsg = "";
 
-    // Prevent duplicate scans in this session
-    if (scanHistory.some(entry => entry.text === content)) {
-      errorMsg = "This QR code has already been scanned.";
+    // Prevent duplicate scans within 10 minutes
+    const now = new Date();
+    const cooldownMs = 10 * 60 * 1000; // 10 minutes in milliseconds
+    const recentScan = scanHistory.find(
+      entry => entry.text === content && now.getTime() - entry.timestamp.getTime() < cooldownMs
+    );
+    if (recentScan) {
+      errorMsg = "This QR code was already scanned within the last 10 minutes.";
       return;
     }
 
@@ -223,7 +228,7 @@
       ...scanHistory,
       {
         text: content,
-        timestamp: new Date()
+        timestamp: now
       }
     ];
     setTimeout(() => scanResult = null, 2000);
