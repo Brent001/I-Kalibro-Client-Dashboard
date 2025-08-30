@@ -12,6 +12,9 @@
   let showReserveModal = false;
   let reservingBook: Book | null = null;
   let reservationLoading = false;
+  let showBorrowModal = false;
+  let borrowingBook: Book | null = null;
+  let borrowLoading = false;
 
   // API response types
   interface Book {
@@ -204,7 +207,7 @@
     }
 
     try {
-      const response = await fetch('/api/books/borrow', {
+      const response = await fetch('/api/transactions', {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -214,9 +217,9 @@
       });
 
       const data = await response.json();
-      
+
       if (response.ok && data.success) {
-        alert(`Successfully borrowed "${book.title}". Due date: ${data.data.dueDate}`);
+        alert(`Successfully borrowed "${book.title}". Due date: ${data.dueDate || data.message || ''}`);
         // Refresh data
         await Promise.all([fetchBooks(), fetchStats()]);
         if (selectedBook && selectedBook.id === book.id) {
@@ -267,6 +270,40 @@
       error = err instanceof Error ? err.message : 'An error occurred while reserving the book';
     } finally {
       reservationLoading = false;
+    }
+  }
+
+  // Function to open borrow modal
+  function openBorrowModal(book: Book) {
+    borrowingBook = book;
+    showBorrowModal = true;
+  }
+
+  // Function to confirm borrowing a book
+  async function confirmBorrow() {
+    if (!borrowingBook) return;
+    borrowLoading = true;
+    try {
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId: borrowingBook.id })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert(`Successfully borrowed "${borrowingBook.title}". Due date: ${data.dueDate || data.message || ''}`);
+        await Promise.all([fetchBooks(), fetchStats()]);
+        if (selectedBook && selectedBook.id === borrowingBook.id) showBookDetails = false;
+        showBorrowModal = false;
+        borrowingBook = null;
+      } else {
+        throw new Error(data.message || 'Failed to borrow book');
+      }
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'An error occurred while borrowing the book';
+    } finally {
+      borrowLoading = false;
     }
   }
 
@@ -512,7 +549,7 @@
                 <div class="flex space-x-2">
                   {#if book.copiesAvailable > 0}
                     <button
-                      on:click={() => borrowBook(book)}
+                      on:click={() => openBorrowModal(book)}
                       class="flex-1 px-3 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors duration-200"
                     >
                       Borrow
@@ -753,7 +790,7 @@
               <div class="flex space-x-3 mt-6">
                 {#if selectedBook.copiesAvailable > 0}
                   <button
-                    on:click={() => borrowBook(selectedBook)}
+                    on:click={() => openBorrowModal(selectedBook)}
                     class="flex-1 px-6 py-3 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-colors duration-200"
                   >
                     Borrow Book
@@ -783,14 +820,21 @@
   <!-- Reserve Book Modal -->
   {#if showReserveModal && reservingBook}
     <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" on:click={() => showReserveModal = false}>
-      <div class="bg-white rounded-2xl max-w-md w-full" on:click|stopPropagation>
+      <div class="bg-white rounded-2xl max-w-md w-full shadow-xl" on:click|stopPropagation>
         <div class="p-6">
-          <h3 class="text-xl font-bold text-slate-900 mb-4">Reserve Book</h3>
-          <p class="text-slate-600 mb-6">
-            You are about to reserve "{reservingBook.title}". You will be notified when it becomes available.
+          <div class="flex items-center mb-4">
+            <div class="bg-amber-100 rounded-full p-2 mr-3">
+              <svg class="h-6 w-6 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <h3 class="text-xl font-bold text-slate-900">Reserve Book</h3>
+          </div>
+          <p class="text-slate-700 mb-4">
+            You are about to reserve <span class="font-semibold text-slate-900">"{reservingBook.title}"</span> by {reservingBook.author}.<br>
+            You will be notified when it becomes available.
           </p>
-          
-          <div class="flex space-x-3">
+          <div class="flex flex-col sm:flex-row gap-3 mt-6">
             <button
               on:click={submitReservation}
               disabled={reservationLoading}
@@ -807,7 +851,50 @@
             </button>
             <button
               on:click={() => showReserveModal = false}
-              class="px-4 py-2 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors duration-200"
+              class="flex-1 px-4 py-2 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors duration-200"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Borrow Book Modal -->
+  {#if showBorrowModal && borrowingBook}
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" on:click={() => showBorrowModal = false}>
+      <div class="bg-white rounded-2xl max-w-md w-full shadow-xl" on:click|stopPropagation>
+        <div class="p-6">
+          <div class="flex items-center mb-4">
+            <div class="bg-emerald-100 rounded-full p-2 mr-3">
+              <svg class="h-6 w-6 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </div>
+            <h3 class="text-xl font-bold text-slate-900">Borrow Book</h3>
+          </div>
+          <p class="text-slate-700 mb-4">
+            Are you sure you want to borrow <span class="font-semibold text-slate-900">"{borrowingBook.title}"</span> by {borrowingBook.author}?
+          </p>
+          <div class="flex flex-col sm:flex-row gap-3 mt-6">
+            <button
+              on:click={confirmBorrow}
+              disabled={borrowLoading}
+              class="flex-1 px-4 py-2 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {#if borrowLoading}
+                <div class="flex items-center justify-center">
+                  <div class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                  Borrowing...
+                </div>
+              {:else}
+                Confirm Borrow
+              {/if}
+            </button>
+            <button
+              on:click={() => { showBorrowModal = false; borrowingBook = null; }}
+              class="flex-1 px-4 py-2 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors duration-200"
             >
               Cancel
             </button>

@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import jwt from 'jsonwebtoken';
 import { db } from '$lib/server/db/index.js';
-import { user } from '$lib/server/db/schema/schema.js';
+import { user, qrCodeToken } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
@@ -18,7 +18,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     const userId = decoded.userId || decoded.id;
 
-    // Verify user exists
+    // Verify user exists and is active
     const [userRow] = await db
       .select({ id: user.id, isActive: user.isActive })
       .from(user)
@@ -35,22 +35,26 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       return json({ error: 'Invalid QR content' }, { status: 400 });
     }
 
-    // Process QR code (add your business logic here)
-    const result = processQRCodeServerSide(content, userId);
+    // Check if QR code exists in qrCodeToken table
+    const [qrRow] = await db
+      .select()
+      .from(qrCodeToken)
+      .where(eq(qrCodeToken.token, content))
+      .limit(1);
 
-    // Log the scan (optional)
-    // await db.insert(scanLogs).values({
-    //   userId,
-    //   content,
-    //   timestamp: new Date(),
-    //   processed: result.success
-    // });
+    if (!qrRow) {
+      return json({ error: 'QR code is not valid or not recognized.' }, { status: 400 });
+    }
+
+    // Here you would process time in (e.g., insert into libraryVisit table)
+    // Example pseudo-logic:
+    // await db.insert(libraryVisit).values({ userId, timeIn: new Date(), qrToken: content });
 
     return json({
       success: true,
-      processed: result.processed,
+      processed: true,
       timestamp: new Date().toISOString(),
-      message: result.message || 'QR code processed successfully'
+      message: 'Time in recorded successfully'
     });
 
   } catch (error) {
@@ -61,52 +65,3 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     );
   }
 };
-
-function processQRCodeServerSide(content: string, userId: string) {
-  try {
-    // Add your QR processing logic here
-    // Examples:
-    // - Validate QR format
-    // - Extract library card number
-    // - Check against database
-    // - Update visit logs
-    // - Send notifications
-    
-    console.log(`Processing QR for user ${userId}:`, content.substring(0, 50) + '...');
-    
-    // Example: Library card validation
-    if (content.startsWith('LIBRARY_CARD:')) {
-      const cardNumber = content.replace('LIBRARY_CARD:', '');
-      // Validate card number format
-      if (!/^\d{10}$/.test(cardNumber)) {
-        return {
-          success: false,
-          processed: false,
-          message: 'Invalid library card format'
-        };
-      }
-      
-      // Process valid library card
-      return {
-        success: true,
-        processed: true,
-        message: `Library card ${cardNumber} processed`
-      };
-    }
-    
-    // Default processing
-    return {
-      success: true,
-      processed: true,
-      message: 'QR code content logged'
-    };
-    
-  } catch (error) {
-    console.error('QR processing error:', error);
-    return {
-      success: false,
-      processed: false,
-      message: 'Processing failed'
-    };
-  }
-}

@@ -132,17 +132,11 @@
       await html5QrCode.start(
         cameraId,
         scannerConfig,
-        (decodedText: string) => {
-          processQRCode(decodedText);
-          scanResult = "QR_CODE_DETECTED";
-          scanHistory = [...scanHistory, {
-            text: decodedText,
-            timestamp: new Date()
-          }];
-          
-          setTimeout(() => scanResult = null, 2000);
+        async (decodedText: string) => {
+          await processQRCode(decodedText);
+          await stopScanner(); // Stop scanner after first successful scan
         },
-        () => {} // Ignore scan errors
+        () => {}
       );
       
       isScanning = true;
@@ -185,15 +179,54 @@
     }
   }
 
-  function processQRCode(content: string) {
-    // Send to server for processing if needed
-    console.log('QR Code processed:', content);
-    
-    // You can make a fetch request here to process on server
-    // fetch('/api/process-qr', { 
-    //   method: 'POST', 
-    //   body: JSON.stringify({ content, userId: user.id }) 
-    // });
+  async function processQRCode(content: string) {
+    errorMsg = "";
+
+    // Prevent duplicate scans in this session
+    if (scanHistory.some(entry => entry.text === content)) {
+      errorMsg = "This QR code has already been scanned.";
+      return;
+    }
+
+    // 1. Validate QR code
+    const validateRes = await fetch('/api/process-qr', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content })
+    });
+    const validateData = await validateRes.json();
+
+    if (!validateRes.ok || !validateData.success) {
+      errorMsg = validateData.error || validateData.message || "Invalid QR code";
+      return;
+    }
+
+    // 2. Save time in with user info
+    const saveRes = await fetch('/api/process-qr/db_save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'time_in',
+        username: user.username,
+        fullName: user.name
+      })
+    });
+    const saveData = await saveRes.json();
+
+    if (!saveRes.ok || !saveData.success) {
+      errorMsg = saveData.error || saveData.message || "Failed to save time in";
+      return;
+    }
+
+    scanResult = content; // Show the QR code content
+    scanHistory = [
+      ...scanHistory,
+      {
+        text: content,
+        timestamp: new Date()
+      }
+    ];
+    setTimeout(() => scanResult = null, 2000);
   }
 
   function clearHistory() {
@@ -328,140 +361,90 @@
         </div>
 
       {:else}
-        <!-- Scanner Interface -->
-        <div class="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-4 gap-6">
-          <!-- Scanner Section -->
-          <div class="xl:col-span-3">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              
-              <!-- Camera Selection -->
-              {#if cameras.length > 1}
-                <div class="mb-6">
-                  <label for="camera-select" class="block text-sm font-medium text-gray-700 mb-2">Select Camera</label>
-                  <select
-                    id="camera-select"
-                    class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500"
-                    on:change={handleCameraChange}
-                    bind:value={cameraId}
-                  >
-                    {#each cameras as cam}
-                      <option value={cam.id}>{cam.label}</option>
-                    {/each}
-                  </select>
-                </div>
-              {/if}
-
-              <!-- Error Display -->
-              {#if errorMsg}
-                <div class="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg mb-6 text-sm">
-                  {errorMsg}
-                </div>
-              {/if}
-
-              <!-- Scanner Status -->
-              {#if isScanning && !errorMsg}
-                <div class="w-full flex justify-center mb-4">
-                  <div class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
-                    <div class="flex items-center gap-2">
-                      <div class="w-2 h-2 bg-green-200 rounded-full animate-pulse"></div>
-                      Scanning for QR codes...
-                    </div>
-                  </div>
-                </div>
-              {:else if !isScanning && cameraPermission === 'granted'}
-                <div class="w-full flex justify-center mb-4">
-                  <button
-                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
-                    on:click={startScanner}
-                  >
-                    Start Scanner
-                  </button>
-                </div>
-              {/if}
-
-              <!-- QR Reader Container -->
-              <div class="relative flex justify-center">
-                <div
-                  id="qr-reader"
-                  class="rounded-lg bg-slate-100 overflow-hidden shadow-inner"
-                  style="width: 100%; max-width: 500px; aspect-ratio: 1 / 1;"
-                ></div>
-
-                <!-- Success Overlay -->
-                {#if scanResult}
-                  <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 rounded-lg">
-                    <div class="bg-white p-6 rounded-lg shadow-xl text-center">
-                      <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <svg class="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                        </svg>
-                      </div>
-                      <h3 class="text-lg font-semibold text-gray-900">QR Code Scanned!</h3>
-                    </div>
-                  </div>
-                {/if}
+        <!-- Scanner Interface (No Recent Scans Sidebar) -->
+        <div class="max-w-2xl mx-auto">
+          <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            
+            <!-- Camera Selection -->
+            {#if cameras.length > 1}
+              <div class="mb-6">
+                <label for="camera-select" class="block text-sm font-medium text-gray-700 mb-2">Select Camera</label>
+                <select
+                  id="camera-select"
+                  class="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500"
+                  on:change={handleCameraChange}
+                  bind:value={cameraId}
+                >
+                  {#each cameras as cam}
+                    <option value={cam.id}>{cam.label}</option>
+                  {/each}
+                </select>
               </div>
+            {/if}
 
-              <!-- Scanner Controls -->
-              {#if isScanning}
-                <div class="mt-4 flex justify-center">
-                  <button
-                    class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-60"
-                    on:click={stopScanner}
-                    disabled={isStopping}
-                  >
-                    {isStopping ? 'Stopping...' : 'Stop Scanner'}
-                  </button>
+            <!-- Error Display -->
+            {#if errorMsg}
+              <div class="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg mb-6 text-sm">
+                {errorMsg}
+              </div>
+            {/if}
+
+            <!-- Scanner Status -->
+            {#if isScanning && !errorMsg}
+              <div class="w-full flex justify-center mb-4">
+                <div class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                  <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 bg-green-200 rounded-full animate-pulse"></div>
+                    Scanning for QR codes...
+                  </div>
                 </div>
-              {/if}
-            </div>
-          </div>
-
-          <!-- History Sidebar -->
-          <div class="xl:col-span-1">
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="font-semibold text-slate-900">Recent Scans</h3>
-                {#if scanHistory.length > 0}
-                  <button
-                    class="text-sm text-gray-500 hover:text-red-600"
-                    on:click={clearHistory}
-                  >
-                    Clear
-                  </button>
-                {/if}
               </div>
-
-              <div class="space-y-3 max-h-[500px] overflow-y-auto">
-                {#each scanHistory.slice().reverse() as entry, index}
-                  <div class="p-3 rounded-lg border border-gray-200 bg-gray-50">
-                    <div class="flex justify-between mb-2">
-                      <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                        #{scanHistory.length - index}
-                      </span>
-                      <span class="text-xs text-gray-500">
-                        {entry.timestamp.toLocaleTimeString()}
-                      </span>
-                    </div>
-                    <div class="text-sm text-gray-700 break-all">
-                      {entry.text}
-                    </div>
-                  </div>
-                {:else}
-                  <div class="text-center py-8 text-gray-500">
-                    <p class="text-sm">No QR codes scanned yet</p>
-                  </div>
-                {/each}
+            {:else if !isScanning && cameraPermission === 'granted'}
+              <div class="w-full flex justify-center mb-4">
+                <button
+                  class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                  on:click={startScanner}
+                >
+                  Start Scanner
+                </button>
               </div>
+            {/if}
 
-              {#if scanHistory.length > 0}
-                <div class="mt-4 pt-4 border-t border-gray-200 text-center">
-                  <div class="text-xs text-gray-500">
-                    Total scans: <span class="font-medium">{scanHistory.length}</span>
+            <!-- QR Reader Container -->
+            <div class="relative flex justify-center">
+              <div
+                id="qr-reader"
+                class="rounded-lg bg-slate-100 overflow-hidden shadow-inner"
+                style="width: 100%; max-width: 500px; aspect-ratio: 1 / 1;"
+              ></div>
+
+              <!-- Success Overlay -->
+              {#if scanResult}
+                <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 rounded-lg">
+                  <div class="bg-white p-6 rounded-lg shadow-xl text-center">
+                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg class="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                      </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900 break-all">QR Code: {scanResult}</h3>
                   </div>
                 </div>
               {/if}
             </div>
+
+            <!-- Scanner Controls -->
+            {#if isScanning}
+              <div class="mt-4 flex justify-center">
+                <button
+                  class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-60"
+                  on:click={stopScanner}
+                  disabled={isStopping}
+                >
+                  {isStopping ? 'Stopping...' : 'Stop Scanner'}
+                </button>
+              </div>
+            {/if}
           </div>
         </div>
       {/if}
