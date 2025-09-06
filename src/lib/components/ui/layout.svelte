@@ -235,7 +235,7 @@
               </svg>
             </div>
             <div>
-              <h1 class="text-xl font-bold text-white">i/Kalibro</h1>
+              <h1 class="text-xl font-bold text-white">i-Kalibro</h1>
               <p class="text-sm text-slate-300">Library System</p>
             </div>
           </div>

@@ -15,7 +15,12 @@
   let scanResult: string | null = null;
   let errorMsg = "";
   let cameraPermission: 'granted' | 'denied' | 'pending' | 'checking' = 'pending';
-  let isStopping = false; // Add this state
+  let isStopping = false;
+  
+  // Add processing state to prevent duplicate scans
+  let isProcessing = false;
+  let processingQrCode: string | null = null;
+  let lastProcessedTime = 0;
 
   // Server-side data
   $: ({ scanner, user } = data);
@@ -112,6 +117,11 @@
     try {
       await stopScanner();
       
+      // Reset processing state when starting scanner
+      isProcessing = false;
+      processingQrCode = null;
+      lastProcessedTime = 0;
+      
       const Html5Qrcode = await loadHtml5Qrcode();
       html5QrCode = new Html5Qrcode("qr-reader");
       
@@ -133,16 +143,40 @@
         cameraId,
         scannerConfig,
         async (decodedText: string) => {
-          await processQRCode(decodedText);
-          await stopScanner(); // Stop scanner after first successful scan
+          // Enhanced duplicate prevention
+          const now = Date.now();
+          
+          // Prevent processing the same QR code multiple times in quick succession
+          if (isProcessing || 
+              (processingQrCode === decodedText && now - lastProcessedTime < 5000)) {
+            return;
+          }
+          
+          // Set processing state immediately
+          isProcessing = true;
+          processingQrCode = decodedText;
+          lastProcessedTime = now;
+          
+          try {
+            await processQRCode(decodedText);
+            // Stop scanner after successful scan and processing
+            await stopScanner();
+          } catch (error) {
+            console.error('Error processing QR code:', error);
+            // Reset processing state on error so user can try again
+            isProcessing = false;
+            processingQrCode = null;
+          }
         },
-        () => {}
+        () => {} // Error callback - do nothing for scan errors
       );
       
       isScanning = true;
       errorMsg = "";
     } catch (err: any) {
       isScanning = false;
+      isProcessing = false;
+      processingQrCode = null;
       errorMsg = `Failed to start scanner: ${err.message}`;
     }
   }
@@ -180,58 +214,71 @@
   }
 
   async function processQRCode(content: string) {
-    errorMsg = "";
+    try {
+      errorMsg = "";
 
-    // Prevent duplicate scans within 10 minutes
-    const now = new Date();
-    const cooldownMs = 10 * 60 * 1000; // 10 minutes in milliseconds
-    const recentScan = scanHistory.find(
-      entry => entry.text === content && now.getTime() - entry.timestamp.getTime() < cooldownMs
-    );
-    if (recentScan) {
-      errorMsg = "This QR code was already scanned within the last 10 minutes.";
-      return;
-    }
-
-    // 1. Validate QR code
-    const validateRes = await fetch('/api/process-qr', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content })
-    });
-    const validateData = await validateRes.json();
-
-    if (!validateRes.ok || !validateData.success) {
-      errorMsg = validateData.error || validateData.message || "Invalid QR code";
-      return;
-    }
-
-    // 2. Save time in with user info
-    const saveRes = await fetch('/api/process-qr/db_save', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'time_in',
-        username: user.username,
-        fullName: user.name
-      })
-    });
-    const saveData = await saveRes.json();
-
-    if (!saveRes.ok || !saveData.success) {
-      errorMsg = saveData.error || saveData.message || "Failed to save time in";
-      return;
-    }
-
-    scanResult = content; // Show the QR code content
-    scanHistory = [
-      ...scanHistory,
-      {
-        text: content,
-        timestamp: now
+      // Enhanced duplicate prevention with shorter cooldown for different QR codes
+      const now = new Date();
+      const cooldownMs = 2 * 60 * 1000; // Reduced to 2 minutes
+      const recentScan = scanHistory.find(
+        entry => entry.text === content && now.getTime() - entry.timestamp.getTime() < cooldownMs
+      );
+      
+      if (recentScan) {
+        errorMsg = "This QR code was already scanned recently.";
+        return;
       }
-    ];
-    setTimeout(() => scanResult = null, 2000);
+
+      // 1. Validate QR code
+      const validateRes = await fetch('/api/process-qr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content })
+      });
+      const validateData = await validateRes.json();
+
+      if (!validateRes.ok || !validateData.success) {
+        errorMsg = validateData.error || validateData.message || "Invalid QR code";
+        return;
+      }
+
+      // 2. Save time in with user info
+      const saveRes = await fetch('/api/process-qr/db_save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'time_in',
+          username: user.username,
+          fullName: user.name
+        })
+      });
+      const saveData = await saveRes.json();
+
+      if (!saveRes.ok || !saveData.success) {
+        errorMsg = saveData.error || saveData.message || "Failed to save time in";
+        return;
+      }
+
+      // Success - update UI and history
+      scanResult = content;
+      scanHistory = [
+        { text: content, timestamp: now },
+        ...scanHistory
+      ];
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        scanResult = null;
+        isProcessing = false;
+        processingQrCode = null;
+      }, 3000);
+      
+    } catch (error) {
+      console.error('Error in processQRCode:', error);
+      errorMsg = "An error occurred while processing the QR code";
+      isProcessing = false;
+      processingQrCode = null;
+    }
   }
 
   function clearHistory() {
@@ -242,6 +289,9 @@
   async function cleanup() {
     try {
       await stopScanner();
+      isProcessing = false;
+      processingQrCode = null;
+      lastProcessedTime = 0;
     } catch (error) {
       console.error('Cleanup error:', error);
     }
@@ -357,16 +407,16 @@
               <button
                 class="px-8 py-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700"
                 on:click={startScanner}
-                disabled={cameraPermission === 'pending'}
+                disabled={cameraPermission === 'checking'}
               >
-                {cameraPermission === 'pending' ? 'Requesting Access...' : 'Allow Camera Access'}
+                {cameraPermission === 'checking' ? 'Requesting Access...' : 'Allow Camera Access'}
               </button>
             </div>
           </div>
         </div>
 
       {:else}
-        <!-- Scanner Interface (No Recent Scans Sidebar) -->
+        <!-- Scanner Interface -->
         <div class="max-w-2xl mx-auto">
           <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             
@@ -400,17 +450,22 @@
                 <div class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
                   <div class="flex items-center gap-2">
                     <div class="w-2 h-2 bg-green-200 rounded-full animate-pulse"></div>
-                    Scanning for QR codes...
+                    {#if isProcessing}
+                      Processing QR code...
+                    {:else}
+                      Scanning for QR codes...
+                    {/if}
                   </div>
                 </div>
               </div>
             {:else if !isScanning && cameraPermission === 'granted'}
               <div class="w-full flex justify-center mb-4">
                 <button
-                  class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                  class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
                   on:click={startScanner}
+                  disabled={isProcessing}
                 >
-                  Start Scanner
+                  {isProcessing ? 'Processing...' : 'Start Scanner'}
                 </button>
               </div>
             {/if}
@@ -423,16 +478,31 @@
                 style="width: 100%; max-width: 500px; aspect-ratio: 1 / 1;"
               ></div>
 
+              <!-- Processing Overlay -->
+              {#if isProcessing && !scanResult}
+                <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 rounded-lg">
+                  <div class="bg-white p-6 rounded-lg shadow-xl text-center">
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <div class="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-900">Processing...</h3>
+                    <p class="text-sm text-gray-600">Please wait while we save your entry</p>
+                  </div>
+                </div>
+              {/if}
+
               <!-- Success Overlay -->
               {#if scanResult}
                 <div class="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 rounded-lg">
-                  <div class="bg-white p-6 rounded-lg shadow-xl text-center">
+                  <div class="bg-white p-6 rounded-lg shadow-xl text-center max-w-sm mx-4">
                     <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
                       <svg class="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                       </svg>
                     </div>
-                    <h3 class="text-lg font-semibold text-gray-900 break-all">QR Code: {scanResult}</h3>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Success!</h3>
+                    <p class="text-sm text-gray-600 break-all">QR Code: {scanResult}</p>
+                    <p class="text-xs text-green-600 mt-2">Time in recorded successfully</p>
                   </div>
                 </div>
               {/if}
@@ -444,9 +514,9 @@
                 <button
                   class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-60"
                   on:click={stopScanner}
-                  disabled={isStopping}
+                  disabled={isStopping || isProcessing}
                 >
-                  {isStopping ? 'Stopping...' : 'Stop Scanner'}
+                  {isStopping ? 'Stopping...' : isProcessing ? 'Processing...' : 'Stop Scanner'}
                 </button>
               </div>
             {/if}
