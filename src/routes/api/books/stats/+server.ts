@@ -4,7 +4,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import jwt from 'jsonwebtoken';
 import { db } from '$lib/server/db/index.js';
-import { book, user, category, bookTransaction } from '$lib/server/db/schema/schema.js'; // <-- use user table
+import { book, user, category, bookBorrowing } from '$lib/server/db/schema/schema.js'; // <-- use bookBorrowing instead of bookTransaction
 import { eq, count, sum, gt } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
@@ -80,9 +80,8 @@ export const GET: RequestHandler = async ({ request }) => {
     // Currently borrowed books (active borrow transactions)
     const borrowedBooksResult = await db
       .select({ count: count() })
-      .from(bookTransaction)
-      .where(eq(bookTransaction.transactionType, 'borrow'))
-      .where(eq(bookTransaction.status, 'active'));
+      .from(bookBorrowing)
+      .where(eq(bookBorrowing.status, 'borrowed'));
     const borrowedBooks = borrowedBooksResult[0]?.count || 0;
 
     // Dynamic categories count
