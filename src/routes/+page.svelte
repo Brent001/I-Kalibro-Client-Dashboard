@@ -28,7 +28,7 @@
 </script>
 
 <svelte:head>
-  <title>Login | i/Kalibro Admin Portal</title>
+  <title>Login | i-Kalibro Client Portal</title>
 </svelte:head>
 
 <!-- Notion-Inspired Design -->
@@ -44,7 +44,7 @@
               <circle cx="12" cy="12" r="2"/>
             </svg>
           </div>
-          <h1 class="text-2xl font-medium">i/Kalibro</h1>
+          <h1 class="text-2xl font-medium">i-Kalibro</h1>
         </div>
         <h2 class="text-3xl font-medium mb-4 leading-tight">Welcome to the Library Client Portal</h2>
         <p class="text-slate-300 text-lg leading-relaxed">Access your borrowed books, manage your account, and explore the library collection.</p>
@@ -102,7 +102,7 @@
               <circle cx="12" cy="12" r="2"/>
             </svg>
           </div>
-          <h1 class="text-xl font-medium text-slate-900">i/Kalibro</h1>
+          <h1 class="text-xl font-medium text-slate-900">i-Kalibro</h1>
         </div>
         <p class="text-slate-600">Metro Dagupan Colleges</p>
       </div>
