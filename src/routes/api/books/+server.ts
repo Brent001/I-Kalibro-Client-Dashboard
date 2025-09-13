@@ -1,11 +1,11 @@
-// src/routes/api/books/+server.ts - Enhanced version with full field support
+// src/routes/api/books/+server.ts - Updated for new schema
 
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import jwt from 'jsonwebtoken';
 import { eq, like, and, or, gt, count, not } from 'drizzle-orm';
 import { db } from '$lib/server/db/index.js';
-import { book, user, category, bookTransaction } from '$lib/server/db/schema/schema.js'; // <-- use user table
+import { book, user, category, bookBorrowing } from '$lib/server/db/schema/schema.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
@@ -22,13 +22,9 @@ interface CreateBookRequest {
   category?: string;
   publisher?: string;
   publishedYear: number;
-  edition?: string;
   language?: string;
   copiesAvailable: number;
   location?: string;
-  description?: string;
-  tags?: string[];
-  supplier?: string;
 }
 
 async function authenticateUser(request: Request): Promise<AuthenticatedUser | null> {
@@ -89,19 +85,19 @@ function validateYear(year: number): boolean {
   return year >= 1000 && year <= currentYear;
 }
 
-function generateQRCode(isbn: string, title: string): string {
+function generateQRCode(bookId: string, title: string): string {
   // In a real application, you might use a QR code library
   // For now, we'll generate a unique identifier
   const timestamp = Date.now();
-  const hash = Buffer.from(`${isbn}-${title}-${timestamp}`).toString('base64').substring(0, 16);
+  const hash = Buffer.from(`${bookId}-${title}-${timestamp}`).toString('base64').substring(0, 16);
   return `QR-${hash}`;
 }
 
 // GET - Fetch books with enhanced filtering
 export const GET: RequestHandler = async ({ request, url }) => {
   try {
-    const user = await authenticateUser(request);
-    if (!user) {
+    const authenticatedUser = await authenticateUser(request);
+    if (!authenticatedUser) {
       throw error(401, { message: 'Unauthorized' });
     }
 
@@ -162,11 +158,16 @@ export const GET: RequestHandler = async ({ request, url }) => {
         bookId: book.bookId,
         title: book.title,
         author: book.author,
+        language: book.language,
         qrCode: book.qrCode,
         publishedYear: book.publishedYear,
         copiesAvailable: book.copiesAvailable,
         categoryId: book.categoryId,
-        category: category.name
+        publisher: book.publisher,
+        location: book.location,
+        category: category.name,
+        createdAt: book.createdAt,
+        updatedAt: book.updatedAt
       })
       .from(book)
       .leftJoin(category, eq(book.categoryId, category.id))
@@ -203,15 +204,15 @@ export const GET: RequestHandler = async ({ request, url }) => {
   }
 };
 
-// POST - Create new book with full field support
+// POST - Create new book
 export const POST: RequestHandler = async ({ request }) => {
   try {
-    const user = await authenticateUser(request);
-    if (!user) {
+    const authenticatedUser = await authenticateUser(request);
+    if (!authenticatedUser) {
       throw error(401, { message: 'Unauthorized' });
     }
 
-    if (user.role !== 'admin' && user.role !== 'staff') {
+    if (authenticatedUser.role !== 'admin' && authenticatedUser.role !== 'staff') {
       throw error(403, { message: 'Insufficient permissions to add books' });
     }
 
@@ -224,9 +225,14 @@ export const POST: RequestHandler = async ({ request }) => {
       throw error(400, { message: `Missing required fields: ${missingFields.join(', ')}` });
     }
 
-    // Validate bookId format (example: FIC-PBS-2002)
+    // Validate bookId format
     if (!/^[A-Z0-9\-]+$/i.test(body.bookId.trim())) {
       throw error(400, { message: 'Book ID must be alphanumeric and may include dashes.' });
+    }
+
+    // Validate year
+    if (!validateYear(body.publishedYear)) {
+      throw error(400, { message: `Published year must be between 1000 and ${new Date().getFullYear()}` });
     }
 
     // Check if bookId already exists
@@ -239,7 +245,17 @@ export const POST: RequestHandler = async ({ request }) => {
       throw error(409, { message: `A book with Book ID "${body.bookId}" already exists.` });
     }
 
-    // Prepare book data for insertion (only fields in schema)
+    // Validate categoryId exists
+    const categoryExists = await db
+      .select({ id: category.id })
+      .from(category)
+      .where(eq(category.id, body.categoryId))
+      .limit(1);
+    if (categoryExists.length === 0) {
+      throw error(400, { message: 'Invalid categoryId' });
+    }
+
+    // Prepare book data for insertion
     const bookData = {
       bookId: body.bookId.trim(),
       title: body.title.trim(),
@@ -250,11 +266,7 @@ export const POST: RequestHandler = async ({ request }) => {
       copiesAvailable: body.copiesAvailable,
       categoryId: body.categoryId,
       publisher: body.publisher ? body.publisher.trim() : null,
-      edition: body.edition ? body.edition.trim() : null,
-      location: body.location ? body.location.trim() : null,
-      description: body.description ? body.description.trim() : null,
-      tags: Array.isArray(body.tags) ? body.tags.join(',') : (body.tags ? body.tags : null),
-      supplier: body.supplier ? body.supplier.trim() : null
+      location: body.location ? body.location.trim() : null
     };
 
     // Insert the book
@@ -272,15 +284,16 @@ export const POST: RequestHandler = async ({ request }) => {
         copiesAvailable: book.copiesAvailable,
         categoryId: book.categoryId,
         publisher: book.publisher,
-        edition: book.edition,
         location: book.location,
-        description: book.description,
-        tags: book.tags,
-        supplier: book.supplier
+        createdAt: book.createdAt
       });
 
     // Get category name for response
-    const [cat] = await db.select({ name: category.name }).from(category).where(eq(category.id, newBook.categoryId)).limit(1);
+    const [cat] = await db
+      .select({ name: category.name })
+      .from(category)
+      .where(eq(category.id, newBook.categoryId))
+      .limit(1);
 
     return json({
       success: true,
@@ -301,15 +314,15 @@ export const POST: RequestHandler = async ({ request }) => {
   }
 };
 
-// PUT - Update book with full field support
+// PUT - Update book
 export const PUT: RequestHandler = async ({ request, url }) => {
   try {
-    const user = await authenticateUser(request);
-    if (!user) {
+    const authenticatedUser = await authenticateUser(request);
+    if (!authenticatedUser) {
       throw error(401, { message: 'Unauthorized' });
     }
 
-    if (user.role !== 'admin' && user.role !== 'staff') {
+    if (authenticatedUser.role !== 'admin' && authenticatedUser.role !== 'staff') {
       throw error(403, { message: 'Insufficient permissions to update books' });
     }
 
@@ -329,8 +342,10 @@ export const PUT: RequestHandler = async ({ request, url }) => {
       const conflict = await db
         .select({ id: book.id })
         .from(book)
-        .where(eq(book.bookId, body.bookId.trim()))
-        .where(not(eq(book.id, parseInt(bookId))))
+        .where(and(
+          eq(book.bookId, body.bookId.trim()),
+          not(eq(book.id, parseInt(bookId)))
+        ))
         .limit(1);
       if (conflict.length > 0) {
         throw error(409, { message: `A book with Book ID "${body.bookId}" already exists.` });
@@ -344,7 +359,6 @@ export const PUT: RequestHandler = async ({ request, url }) => {
         .from(category)
         .where(eq(category.id, body.categoryId))
         .limit(1);
-
       if (categoryExists.length === 0) {
         throw error(400, { message: 'Invalid categoryId' });
       }
@@ -391,14 +405,6 @@ export const PUT: RequestHandler = async ({ request, url }) => {
       validationErrors.push('Number of copies must be non-negative');
     }
 
-    if (body.pages !== undefined && body.pages < 1) {
-      validationErrors.push('Number of pages must be positive');
-    }
-
-    if (body.price !== undefined && body.price < 0) {
-      validationErrors.push('Price cannot be negative');
-    }
-
     if (validationErrors.length > 0) {
       throw error(400, { message: validationErrors.join('; ') });
     }
@@ -411,6 +417,9 @@ export const PUT: RequestHandler = async ({ request, url }) => {
     if (body.copiesAvailable !== undefined) updateData.copiesAvailable = body.copiesAvailable;
     if (body.categoryId !== undefined) updateData.categoryId = body.categoryId;
     if (body.bookId !== undefined) updateData.bookId = body.bookId.trim();
+    if (body.language !== undefined) updateData.language = body.language ? body.language.trim() : null;
+    if (body.publisher !== undefined) updateData.publisher = body.publisher ? body.publisher.trim() : null;
+    if (body.location !== undefined) updateData.location = body.location ? body.location.trim() : null;
 
     const [updatedBook] = await db
       .update(book)
@@ -418,16 +427,25 @@ export const PUT: RequestHandler = async ({ request, url }) => {
       .where(eq(book.id, parseInt(bookId)))
       .returning({
         id: book.id,
+        bookId: book.bookId,
         title: book.title,
         author: book.author,
+        language: book.language,
         qrCode: book.qrCode,
         publishedYear: book.publishedYear,
         copiesAvailable: book.copiesAvailable,
-        categoryId: book.categoryId
+        categoryId: book.categoryId,
+        publisher: book.publisher,
+        location: book.location,
+        updatedAt: book.updatedAt
       });
 
     // Get category name for response
-    const [cat] = await db.select({ name: category.name }).from(category).where(eq(category.id, updatedBook.categoryId)).limit(1);
+    const [cat] = await db
+      .select({ name: category.name })
+      .from(category)
+      .where(eq(category.id, updatedBook.categoryId))
+      .limit(1);
 
     return json({
       success: true,
@@ -450,13 +468,13 @@ export const PUT: RequestHandler = async ({ request, url }) => {
 // DELETE - Delete book
 export const DELETE: RequestHandler = async ({ request, url }) => {
   try {
-    const user = await authenticateUser(request);
-    if (!user) {
+    const authenticatedUser = await authenticateUser(request);
+    if (!authenticatedUser) {
       throw error(401, { message: 'Unauthorized' });
     }
 
     // Only admins can delete books
-    if (user.role !== 'admin') {
+    if (authenticatedUser.role !== 'admin') {
       throw error(403, { message: 'Only administrators can delete books' });
     }
 
@@ -476,23 +494,14 @@ export const DELETE: RequestHandler = async ({ request, url }) => {
       throw error(404, { message: 'Book not found' });
     }
 
-    // Prevent deletion if book is currently borrowed
-    const issuedCount = await db
-      .select({ count: count() })
-      .from(bookTransaction)
-      .where(eq(bookTransaction.bookId, parseInt(bookId)))
-      .where(eq(bookTransaction.transactionType, 'borrow'))
-      .where(eq(bookTransaction.status, 'active'));
-    if (issuedCount[0]?.count > 0) {
-      throw error(400, { message: 'Cannot delete book: It is currently borrowed.' });
-    }
+    // Note: This is a pure books API focused only on book catalog management
 
     await db
       .delete(book)
       .where(eq(book.id, parseInt(bookId)));
 
     // Log the action
-    console.log(`Book deleted by ${user.username} (ID: ${user.id}):`, {
+    console.log(`Book deleted by ${authenticatedUser.username} (ID: ${authenticatedUser.id}):`, {
       bookId: parseInt(bookId),
       title: existingBook[0].title,
       timestamp: new Date().toISOString()

@@ -219,13 +219,21 @@
 
       // Enhanced duplicate prevention with shorter cooldown for different QR codes
       const now = new Date();
-      const cooldownMs = 2 * 60 * 1000; // Reduced to 2 minutes
+      const cooldownMs = 2 * 60 * 1000;
       const recentScan = scanHistory.find(
         entry => entry.text === content && now.getTime() - entry.timestamp.getTime() < cooldownMs
       );
       
       if (recentScan) {
         errorMsg = "This QR code was already scanned recently.";
+        isProcessing = false;
+        processingQrCode = null;
+        setTimeout(() => {
+          errorMsg = "";
+          // Resume scanning after error disappears
+          isProcessing = false;
+          processingQrCode = null;
+        }, 10000);
         return;
       }
 
@@ -239,6 +247,14 @@
 
       if (!validateRes.ok || !validateData.success) {
         errorMsg = validateData.error || validateData.message || "Invalid QR code";
+        isProcessing = false;
+        processingQrCode = null;
+        setTimeout(() => {
+          errorMsg = "";
+          // Resume scanning after error disappears
+          isProcessing = false;
+          processingQrCode = null;
+        }, 10000);
         return;
       }
 
