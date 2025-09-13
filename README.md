@@ -70,7 +70,6 @@ This project is **unlicensed**.
 
 - Brent Kenneth
 - Angelica
-- Art Kendrick
 - Kristel
 - Joseph Benjamin
 
