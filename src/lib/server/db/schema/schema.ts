@@ -1,6 +1,8 @@
 import { pgTable, serial, integer, varchar, boolean, date, timestamp } from 'drizzle-orm/pg-core';
 
-// Keep existing tables unchanged
+/* =====================
+   ACCOUNT (Admin / Staff)
+   ===================== */
 export const account = pgTable('account', {
     id: serial('id').primaryKey(),
     name: varchar('name', { length: 100 }),
@@ -13,6 +15,9 @@ export const account = pgTable('account', {
     updatedAt: timestamp('updated_at').defaultNow()
 });
 
+/* =====================
+   USER (Student / Faculty)
+   ===================== */
 export const user = pgTable('user', {
     id: serial('id').primaryKey(),
     name: varchar('name', { length: 100 }).notNull(),
@@ -32,6 +37,9 @@ export const user = pgTable('user', {
     updatedAt: timestamp('updated_at').defaultNow()
 });
 
+/* =====================
+   CATEGORY
+   ===================== */
 export const category = pgTable('category', {
     id: serial('id').primaryKey(),
     name: varchar('name', { length: 50 }).unique().notNull(),
@@ -39,6 +47,9 @@ export const category = pgTable('category', {
     createdAt: timestamp('created_at').defaultNow()
 });
 
+/* =====================
+   BOOK
+   ===================== */
 export const book = pgTable('book', {
     id: serial('id').primaryKey(),
     bookId: varchar('book_id', { length: 30 }).unique().notNull(),
@@ -55,7 +66,9 @@ export const book = pgTable('book', {
     updatedAt: timestamp('updated_at').defaultNow()
 });
 
-// SIMPLIFIED BORROWING TABLE
+/* =====================
+   BOOK BORROWING
+   ===================== */
 export const bookBorrowing = pgTable('book_borrowing', {
     id: serial('id').primaryKey(),
     userId: integer('user_id').references(() => user.id).notNull(),
@@ -63,33 +76,53 @@ export const bookBorrowing = pgTable('book_borrowing', {
     borrowDate: date('borrow_date').notNull(),
     dueDate: date('due_date').notNull(),
     returnDate: date('return_date'), // null if not returned yet
-    status: varchar('status', { length: 20 }).default('borrowed'), // 'borrowed', 'returned', 'overdue'
+    status: varchar('status', { length: 20 }).default('borrowed'), // borrowed | returned | overdue
+    fine: integer('fine').default(0), // stores calculated fine at return
     createdAt: timestamp('created_at').defaultNow()
 });
 
-// SIMPLIFIED RESERVATIONS TABLE
+/* =====================
+   BOOK RESERVATION
+   ===================== */
 export const bookReservation = pgTable('book_reservation', {
     id: serial('id').primaryKey(),
     userId: integer('user_id').references(() => user.id).notNull(),
     bookId: integer('book_id').references(() => book.id).notNull(),
     reservationDate: date('reservation_date').notNull(),
-    status: varchar('status', { length: 20 }).default('active'), // 'active', 'fulfilled', 'cancelled'
+    status: varchar('status', { length: 20 }).default('active'), // active | fulfilled | cancelled
     createdAt: timestamp('created_at').defaultNow()
 });
 
-// Keep other essential tables
+/* =====================
+   LIBRARY VISIT LOG
+   ===================== */
 export const libraryVisit = pgTable('library_visit', {
     id: serial('id').primaryKey(),
     userId: integer('user_id').references(() => user.id),
     username: varchar('username', { length: 50 }),
     fullName: varchar('full_name', { length: 100 }),
-    visitorType: varchar('visitor_type', { length: 20 }),
+    visitorType: varchar('visitor_type', { length: 20 }), // student | faculty | guest
     timeIn: timestamp('time_in').notNull(),
     timeOut: timestamp('time_out'),
     createdAt: timestamp('created_at').defaultNow()
 });
 
+/* =====================
+   QR CODE TOKENS
+   ===================== */
 export const qrCodeToken = pgTable('qr_code_token', {
     id: serial('id').primaryKey(),
     token: varchar('token', { length: 255 }).unique().notNull()
+});
+
+/* =====================
+   USER ACTIVITY LOG
+   ===================== */
+export const userActivity = pgTable('user_activity', {
+    id: serial('id').primaryKey(),
+    userId: integer('user_id').references(() => user.id).notNull(),
+    activityType: varchar('activity_type', { length: 50 }).notNull(), // borrow | return | reserve | visit
+    activityDetails: varchar('activity_details', { length: 255 }), // optional details (book title, etc.)
+    relatedId: integer('related_id'), // e.g. bookBorrowing.id, bookReservation.id, libraryVisit.id
+    timestamp: timestamp('timestamp').defaultNow().notNull()
 });

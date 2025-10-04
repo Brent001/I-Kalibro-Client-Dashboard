@@ -70,7 +70,7 @@ function getTodaysDate(): string {
   return new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
 }
 
-// Reserve a book
+// Reserve a book (users can only reserve ONE book at a time)
 export const POST: RequestHandler = async ({ request }) => {
   try {
     let requestBody;
@@ -110,7 +110,23 @@ export const POST: RequestHandler = async ({ request }) => {
       return error(400, { message: 'Book is currently available. Please borrow instead.' });
     }
 
-    // Check if user already has an active reservation for this book
+    // Check if user already has ANY active reservation (for any book)
+    const [anyActiveReservation] = await db
+      .select()
+      .from(bookReservation)
+      .where(
+        and(
+          eq(bookReservation.userId, userIdNum),
+          eq(bookReservation.status, 'active')
+        )
+      )
+      .limit(1);
+
+    if (anyActiveReservation) {
+      return error(400, { message: 'You can only reserve one book at a time. Please cancel your existing reservation first.' });
+    }
+
+    // Check if user already has an active reservation for this book (redundant, but safe)
     const [existingReservation] = await db
       .select()
       .from(bookReservation)
@@ -169,216 +185,61 @@ export const POST: RequestHandler = async ({ request }) => {
   }
 };
 
-// Borrow a book
+// Borrow a book (disable for users)
 export const PUT: RequestHandler = async ({ request }) => {
-  try {
-    let requestBody;
-    try {
-      requestBody = await request.json();
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      return error(400, { message: 'Invalid JSON in request body' });
-    }
-
-    const { bookId, userId } = requestBody;
-    
-    // Validate input
-    if (!bookId || !userId) {
-      return error(400, { message: 'Book ID and User ID are required' });
-    }
-
-    // Validate that IDs are numbers
-    const bookIdNum = parseInt(bookId);
-    const userIdNum = parseInt(userId);
-    
-    if (isNaN(bookIdNum) || isNaN(userIdNum)) {
-      return error(400, { message: 'Book ID and User ID must be valid numbers' });
-    }
-
-    // Check if user exists
-    const [userExists] = await db.select({ id: user.id }).from(user).where(eq(user.id, userIdNum)).limit(1);
-    if (!userExists) {
-      return error(404, { message: 'User not found' });
-    }
-
-    // Check book availability
-    const [targetBook] = await db.select().from(book).where(eq(book.id, bookIdNum)).limit(1);
-    if (!targetBook) {
-      return error(404, { message: 'Book not found' });
-    }
-    
-    if (!targetBook.copiesAvailable || targetBook.copiesAvailable < 1) {
-      return error(400, { message: 'No copies available to borrow' });
-    }
-
-    // Check if user already has an active borrow for this book
-    const [existingBorrow] = await db
-      .select()
-      .from(bookBorrowing)
-      .where(
-        and(
-          eq(bookBorrowing.userId, userIdNum),
-          eq(bookBorrowing.bookId, bookIdNum),
-          eq(bookBorrowing.status, 'borrowed')
-        )
-      )
-      .limit(1);
-
-    if (existingBorrow) {
-      return error(400, { message: 'You already have this book borrowed' });
-    }
-
-    // --- Sequential operations (no transaction) ---
-    try {
-      // Create borrow record
-      await db.insert(bookBorrowing).values({
-        userId: userIdNum,
-        bookId: bookIdNum,
-        borrowDate: getTodaysDate(),
-        dueDate: calculateDueDate(),
-        status: 'borrowed'
-      });
-
-      // Decrement available copies (optimistic update)
-      await db
-        .update(book)
-        .set({ copiesAvailable: targetBook.copiesAvailable! - 1 })
-        .where(
-          and(
-            eq(book.id, bookIdNum),
-            // Prevent race condition: only update if copiesAvailable > 0
-            // This is not atomic, but helps reduce errors
-            eq(book.copiesAvailable, targetBook.copiesAvailable)
-          )
-        );
-
-      // If user had a reservation for this book, mark it as fulfilled
-      await db
-        .update(bookReservation)
-        .set({ status: 'fulfilled' })
-        .where(
-          and(
-            eq(bookReservation.userId, userIdNum),
-            eq(bookReservation.bookId, bookIdNum),
-            eq(bookReservation.status, 'active')
-          )
-        );
-    } catch (dbError) {
-      console.error('Database operation failed:', dbError);
-      throw new Error('Failed to process book borrowing');
-    }
-
-    return json({ 
-      success: true, 
-      message: 'Book borrowed successfully',
-      data: {
-        bookId: bookIdNum,
-        userId: userIdNum,
-        borrowDate: getTodaysDate(),
-        dueDate: calculateDueDate(),
-        remainingCopies: targetBook.copiesAvailable - 1
-      }
-    });
-
-  } catch (err: any) {
-    console.error('PUT /borrow error:', err);
-    
-    // Handle different types of errors
-    if (err.status) {
-      return error(err.status, { message: err.message });
-    }
-    
-    return error(500, { message: 'Internal server error during borrowing' });
-  }
+  return error(403, { message: 'Borrowing can only be confirmed by a librarian at the library.' });
 };
 
-// Return a book
+// Return a book (optional: keep or restrict as needed)
 export const PATCH: RequestHandler = async ({ request }) => {
-  try {
-    let requestBody;
-    try {
-      requestBody = await request.json();
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      return error(400, { message: 'Invalid JSON in request body' });
-    }
+  return error(403, { message: 'Returning can only be confirmed by a librarian at the library.' });
+};
 
-    const { bookId, userId } = requestBody;
-    
-    // Validate input
-    if (!bookId || !userId) {
-      return error(400, { message: 'Book ID and User ID are required' });
-    }
+// GET /api/books/transaction?user=username or ?userId=123
+export const GET: RequestHandler = async ({ url }) => {
+  const username = url.searchParams.get('user');
+  const userIdParam = url.searchParams.get('userId');
 
-    const bookIdNum = parseInt(bookId);
-    const userIdNum = parseInt(userId);
-    
-    if (isNaN(bookIdNum) || isNaN(userIdNum)) {
-      return error(400, { message: 'Book ID and User ID must be valid numbers' });
-    }
-
-    // Find the active borrow record
-    const [borrowRecord] = await db
-      .select()
-      .from(bookBorrowing)
-      .where(
-        and(
-          eq(bookBorrowing.userId, userIdNum),
-          eq(bookBorrowing.bookId, bookIdNum),
-          eq(bookBorrowing.status, 'borrowed')
-        )
-      )
-      .limit(1);
-
-    if (!borrowRecord) {
-      return error(404, { message: 'No active borrow record found for this book and user' });
-    }
-
-    // Get book info for updating copies
-    const [targetBook] = await db.select().from(book).where(eq(book.id, bookIdNum)).limit(1);
-    if (!targetBook) {
-      return error(404, { message: 'Book not found' });
-    }
-
-    // Execute operations sequentially (Neon HTTP doesn't support transactions)
-    try {
-      // Update borrow record
-      await db
-        .update(bookBorrowing)
-        .set({ 
-          returnDate: getTodaysDate(),
-          status: 'returned'
-        })
-        .where(eq(bookBorrowing.id, borrowRecord.id));
-
-      // Increment available copies
-      await db
-        .update(book)
-        .set({ copiesAvailable: (targetBook.copiesAvailable || 0) + 1 })
-        .where(eq(book.id, bookIdNum));
-    } catch (dbError) {
-      console.error('Database operation failed:', dbError);
-      throw new Error('Failed to process book return');
-    }
-
-    return json({
-      success: true,
-      message: 'Book returned successfully',
-      data: {
-        bookId: bookIdNum,
-        userId: userIdNum,
-        returnDate: getTodaysDate(),
-        newAvailableCopies: (targetBook.copiesAvailable || 0) + 1
-      }
-    });
-
-  } catch (err: any) {
-    console.error('PATCH /return error:', err);
-    
-    if (err.status) {
-      return error(err.status, { message: err.message });
-    }
-    
-    return error(500, { message: 'Internal server error during book return' });
+  if (!username && !userIdParam) {
+    return error(400, { message: 'Missing user or userId parameter' });
   }
+
+  // Find user by username or userId
+  let userRow;
+  if (username) {
+    [userRow] = await db.select({ id: user.id }).from(user).where(eq(user.username, username)).limit(1);
+  } else if (userIdParam) {
+    [userRow] = await db.select({ id: user.id }).from(user).where(eq(user.id, Number(userIdParam))).limit(1);
+  }
+
+  if (!userRow) {
+    return error(404, { message: 'User not found' });
+  }
+
+  // Get borrowed books (status = 'borrowed')
+  const borrowed = await db
+    .select({ bookId: bookBorrowing.bookId })
+    .from(bookBorrowing)
+    .where(
+      and(
+        eq(bookBorrowing.userId, userRow.id),
+        eq(bookBorrowing.status, 'borrowed')
+      )
+    );
+
+  // Get reserved books (status = 'active')
+  const reserved = await db
+    .select({ bookId: bookReservation.bookId })
+    .from(bookReservation)
+    .where(
+      and(
+        eq(bookReservation.userId, userRow.id),
+        eq(bookReservation.status, 'active')
+      )
+    );
+
+  return json({
+    borrowedBookIds: borrowed.map(b => b.bookId),
+    reservedBookIds: reserved.map(r => r.bookId)
+  });
 };

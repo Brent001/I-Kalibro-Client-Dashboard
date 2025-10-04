@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 
     if (userCount === 0) {
         // No users: redirect to setup page
-        throw redirect(302, '/setup');
+        throw redirect(302, '/register');
     }
 
     // Otherwise, allow access to login page

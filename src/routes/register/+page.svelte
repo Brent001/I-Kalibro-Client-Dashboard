@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
 
   let formData = {
     name: '',
@@ -19,6 +19,9 @@
 
   let errors: Record<string, string> = {};
   let currentStep = 1;
+  let isSubmitting = false;
+  let submitError = '';
+  let submitSuccess = '';
   const totalSteps = 3;
 
   const courses = [
@@ -40,7 +43,6 @@
     const stepErrors: Record<string, string> = {};
 
     if (step === 1) {
-      // Basic Information
       if (!formData.name.trim()) stepErrors.name = 'Full name is required';
       if (!formData.email.trim()) {
         stepErrors.email = 'Email is required';
@@ -58,7 +60,6 @@
     }
 
     if (step === 2) {
-      // Account Information
       if (!formData.username.trim()) {
         stepErrors.username = 'Username is required';
       } else if (formData.username.length < 3) {
@@ -83,7 +84,6 @@
     }
 
     if (step === 3) {
-      // Academic/Professional Information
       if (formData.role === 'student') {
         if (!formData.enrollmentNo.trim()) stepErrors.enrollmentNo = 'Enrollment number is required';
         if (!formData.course) stepErrors.course = 'Course is required';
@@ -99,9 +99,7 @@
   }
 
   function nextStep() {
-    // Clear previous errors for current step
     clearStepErrors(currentStep);
-    
     if (validateStep(currentStep)) {
       currentStep = Math.min(currentStep + 1, totalSteps);
     }
@@ -131,8 +129,57 @@
     errors = { ...errors };
   }
 
+  async function handleSubmit(e: Event) {
+    e.preventDefault();
+    
+    clearStepErrors(3);
+    if (!validateStep(3)) return;
+
+    isSubmitting = true;
+    submitError = '';
+    submitSuccess = '';
+
+    try {
+      const response = await fetch('/api/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          username: formData.username,
+          password: formData.password,
+          role: formData.role,
+          age: formData.age || null,
+          enrollmentNo: formData.role === 'student' ? formData.enrollmentNo : null,
+          course: formData.role === 'student' ? formData.course : null,
+          year: formData.role === 'student' ? formData.year : null,
+          department: formData.role === 'faculty' ? formData.department : null,
+          designation: formData.role === 'faculty' ? formData.designation : null
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        submitSuccess = data.message || 'Account created successfully!';
+        setTimeout(() => {
+          goto('/');
+        }, 2000);
+      } else {
+        submitError = data.message || 'Failed to create account';
+      }
+    } catch (err) {
+      submitError = 'Network error. Please try again.';
+      console.error('Registration error:', err);
+    } finally {
+      isSubmitting = false;
+    }
+  }
+
   $: progressPercentage = (currentStep / totalSteps) * 100;
-  $: serverErrors = $page.form?.errors ?? {};
 </script>
 
 <svelte:head>
@@ -141,7 +188,7 @@
 
 <div class="min-h-screen bg-white flex">
   <!-- Left Panel (Branding & Info) -->
-  <div class="hidden lg:flex lg:w-2/5 bg-slate-900 text-white flex-col justify-center p-12">
+  <div class="hidden lg:flex lg:w-2/5 bg-slate-900 text-white flex-col justify-center p-12 lg:sticky lg:top-0 lg:h-screen">
     <div class="max-w-sm">
       <div class="mb-12">
         <div class="flex items-center mb-6">
@@ -243,7 +290,7 @@
       </div>
 
       <!-- Registration Form -->
-      <form method="POST" use:enhance class="bg-white rounded-lg shadow-sm border border-slate-200">
+      <form on:submit={handleSubmit} class="bg-white rounded-lg shadow-sm border border-slate-200">
         <div class="p-6 sm:p-8">
           {#if currentStep === 1}
             <!-- Step 1: Basic Information -->
@@ -360,7 +407,7 @@
           {/if}
 
           {#if currentStep === 2}
-            <!-- Step 2: Account Information -->
+            <!-- Step 2: Account Information (same as your original, keeping role selection) -->
             <div class="space-y-6">
               <div class="text-center mb-6">
                 <h2 class="text-lg font-semibold text-gray-900 mb-2">Account Information</h2>
@@ -645,14 +692,26 @@
             </div>
           {/if}
 
-          <!-- Example error display -->
-          {#if serverErrors.submit}
-            <div class="mt-4 bg-red-50 border border-red-200 rounded-md p-3">
+          <!-- Success Message -->
+          {#if submitSuccess}
+            <div class="mt-4 bg-green-50 border border-green-200 rounded-md p-4">
               <div class="flex">
-                <svg class="h-5 w-5 text-red-400 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <svg class="h-5 w-5 text-green-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <p class="text-sm text-green-800">{submitSuccess}</p>
+              </div>
+            </div>
+          {/if}
+
+          <!-- Error Message -->
+          {#if submitError}
+            <div class="mt-4 bg-red-50 border border-red-200 rounded-md p-4">
+              <div class="flex">
+                <svg class="h-5 w-5 text-red-400 mr-3 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
                 </svg>
-                <p class="text-sm text-red-800">{serverErrors.submit}</p>
+                <p class="text-sm text-red-800">{submitError}</p>
               </div>
             </div>
           {/if}
@@ -666,7 +725,8 @@
                 <button
                   type="button"
                   on:click={prevStep}
-                  class="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-colors"
+                  disabled={isSubmitting}
+                  class="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
@@ -680,7 +740,8 @@
                 <button
                   type="button"
                   on:click={nextStep}
-                  class="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-slate-900 border border-transparent rounded-md hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-colors"
+                  disabled={isSubmitting}
+                  class="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-slate-900 border border-transparent rounded-md hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continue
                   <svg class="h-4 w-4 ml-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -690,12 +751,21 @@
               {:else}
                 <button
                   type="submit"
-                  class="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-slate-900 border border-transparent rounded-md hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-colors"
+                  disabled={isSubmitting}
+                  class="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-slate-900 border border-transparent rounded-md hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
-                  </svg>
-                  Create Account
+                  {#if isSubmitting}
+                    <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Creating...
+                  {:else}
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                    </svg>
+                    Create Account
+                  {/if}
                 </button>
               {/if}
             </div>
