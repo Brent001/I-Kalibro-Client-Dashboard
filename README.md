@@ -52,7 +52,7 @@ src/
 
 ## 📝 License
 
-This project is **unlicensed**.
+This project is **Proprietary**. Viewing Purpose Only.
 
 ---
 
