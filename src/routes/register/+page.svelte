@@ -22,6 +22,7 @@
   let isSubmitting = false;
   let submitError = '';
   let submitSuccess = '';
+  let agreedToTerms = false;
   const totalSteps = 3;
 
   const courses = [
@@ -92,6 +93,10 @@
         if (!formData.department) stepErrors.department = 'Department is required';
         if (!formData.designation.trim()) stepErrors.designation = 'Designation is required';
       }
+      
+      if (!agreedToTerms) {
+        stepErrors.terms = 'You must agree to the Terms of Service and Privacy Policy';
+      }
     }
 
     errors = { ...errors, ...stepErrors };
@@ -120,7 +125,7 @@
   function getStepFields(step: number): string[] {
     if (step === 1) return ['name', 'email', 'phone', 'age'];
     if (step === 2) return ['username', 'password', 'confirmPassword'];
-    if (step === 3) return ['enrollmentNo', 'course', 'year', 'department', 'designation'];
+    if (step === 3) return ['enrollmentNo', 'course', 'year', 'department', 'designation', 'terms'];
     return [];
   }
 
@@ -222,8 +227,8 @@
             </svg>
           </div>
           <div>
-            <h3 class="font-medium mb-1">Secure Account Creation</h3>
-            <p class="text-sm text-slate-300">Your data is protected and reviewed by staff</p>
+            <h3 class="font-medium mb-1">Secure & Private</h3>
+            <p class="text-sm text-slate-300">Your data is protected under RA 10173</p>
           </div>
         </div>
         <div class="flex items-start space-x-3">
@@ -407,7 +412,7 @@
           {/if}
 
           {#if currentStep === 2}
-            <!-- Step 2: Account Information (same as your original, keeping role selection) -->
+            <!-- Step 2: Account Information -->
             <div class="space-y-6">
               <div class="text-center mb-6">
                 <h2 class="text-lg font-semibold text-gray-900 mb-2">Account Information</h2>
@@ -673,18 +678,65 @@
                 </div>
               {/if}
 
-              <!-- Terms and Conditions -->
-              <div class="pt-4 border-t border-gray-200">
-                <div class="bg-gray-50 rounded-lg p-4">
+              <!-- Privacy Policy & Terms -->
+              <div class="pt-4 border-t border-gray-200 space-y-4">
+                <!-- Privacy Notice Box -->
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                   <div class="flex items-start space-x-3">
                     <div class="flex-shrink-0 pt-0.5">
                       <svg class="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                       </svg>
                     </div>
-                    <div class="text-sm text-gray-700">
-                      <p class="font-medium mb-1">Ready to create your account!</p>
-                      <p>By clicking "Create Account", you agree to our Terms of Service and Privacy Policy. Your account will be reviewed and activated by library staff.</p>
+                    <div class="text-sm text-blue-900">
+                      <p class="font-semibold mb-2">Privacy & Data Collection Notice</p>
+                      <p class="mb-2">We collect and process your personal information in accordance with the <strong>Data Privacy Act of 2012 (Republic Act No. 10173)</strong>.</p>
+                      <ul class="list-disc list-inside space-y-1 text-xs ml-1">
+                        <li>Your data will be used solely for library account management and services</li>
+                        <li>We protect your information with appropriate security measures</li>
+                        <li>You have the right to access, correct, or request deletion of your data</li>
+                        <li>Your information will not be shared with third parties without consent</li>
+                        <li>Data retention follows institutional policies and legal requirements</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Terms and Conditions Checkbox -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                  <label class="flex items-start space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      bind:checked={agreedToTerms}
+                      on:change={() => clearError('terms')}
+                      class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <div class="flex-1 text-sm text-gray-700">
+                      <p>I have read and agree to the <a href="/terms" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">Terms of Service</a> and <a href="/privacy" target="_blank" class="text-blue-600 hover:text-blue-800 underline font-medium">Privacy Policy</a>. I understand that:</p>
+                      <ul class="list-disc list-inside mt-2 space-y-1 text-xs ml-1">
+                        <li>My account will be reviewed and activated by library staff</li>
+                        <li>I am responsible for maintaining the confidentiality of my account</li>
+                        <li>I will comply with all library rules and regulations</li>
+                        <li>Misuse of library resources may result in account suspension</li>
+                      </ul>
+                    </div>
+                  </label>
+                  {#if errors.terms}
+                    <p class="mt-2 text-sm text-red-600">{errors.terms}</p>
+                  {/if}
+                </div>
+
+                <!-- Data Subject Rights Info -->
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <div class="flex items-start space-x-3">
+                    <div class="flex-shrink-0 pt-0.5">
+                      <svg class="h-5 w-5 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                      </svg>
+                    </div>
+                    <div class="text-xs text-amber-900">
+                      <p class="font-semibold mb-1">Your Rights as a Data Subject</p>
+                      <p>Under RA 10173, you have the right to be informed, access, correct, erase, object to processing, data portability, and file complaints. For privacy concerns, contact our Data Protection Officer at <strong>dpo@school.edu</strong> or visit the library office.</p>
                     </div>
                   </div>
                 </div>
@@ -781,6 +833,10 @@
             Sign in here
           </a>
         </p>
+        <div class="mt-4 text-xs text-slate-500">
+          <p>Protected by the Data Privacy Act of 2012 (RA 10173)</p>
+          <p class="mt-1">© 2024 Metro Dagupan Colleges Library. All rights reserved.</p>
+        </div>
       </div>
     </div>
   </div>

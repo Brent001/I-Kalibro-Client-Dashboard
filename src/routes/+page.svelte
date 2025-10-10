@@ -2,12 +2,37 @@
   let showPassword = false;
   let username = '';
   let password = '';
+  let captchaAnswer = '';
   let errorMsg = '';
   let isLoading = false;
+  
+  // Math problem variables
+  let num1 = 0;
+  let num2 = 0;
+  let correctAnswer = 0;
+
+  // Generate a new math problem
+  function generateMathProblem() {
+    num1 = Math.floor(Math.random() * 10) + 1;
+    num2 = Math.floor(Math.random() * 10) + 1;
+    correctAnswer = num1 + num2;
+    captchaAnswer = ''; // Clear previous answer
+  }
+
+  // Initialize on component mount
+  generateMathProblem();
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
     errorMsg = '';
+    
+    // Validate math problem first
+    if (parseInt(captchaAnswer) !== correctAnswer) {
+      errorMsg = 'Incorrect answer to the math problem. Please try again.';
+      generateMathProblem(); // Generate new problem on failure
+      return;
+    }
+    
     isLoading = true;
     
     if (username && password) {
@@ -22,9 +47,11 @@
           window.location.href = '/dashboard';
         } else {
           errorMsg = data.message || 'Login failed';
+          generateMathProblem(); // Generate new problem on login failure
         }
       } catch (err) {
         errorMsg = 'Network error. Please try again.';
+        generateMathProblem(); // Generate new problem on error
       } finally {
         isLoading = false;
       }
@@ -41,55 +68,55 @@
   <div class="hidden lg:flex lg:w-2/5 bg-gradient-to-br from-slate-900 to-slate-800 text-white flex-col justify-center p-12">
     <div class="max-w-lg">
       <!-- Logo & Brand -->
-      <div class="mb-12">
-        <div class="flex items-center mb-6">
-          <div class="w-12 h-12 bg-white rounded-xl flex items-center justify-center mr-4 shadow-lg">
-            <svg class="h-7 w-7 text-slate-900" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <div class="mb-10">
+        <div class="flex items-center mb-5">
+          <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mr-3 shadow-lg">
+            <svg class="h-6 w-6 text-slate-900" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
               <circle cx="12" cy="12" r="2"/>
             </svg>
           </div>
-          <h1 class="text-3xl font-bold">i-Kalibro</h1>
+          <h1 class="text-2xl font-bold">i-Kalibro</h1>
         </div>
-        <h2 class="text-4xl font-bold mb-4 leading-tight">Library Client Portal</h2>
-        <p class="text-slate-300 text-lg leading-relaxed">Access your borrowed books, manage your account, and explore our collection.</p>
+        <h2 class="text-3xl font-bold mb-3 leading-tight">Library Client Portal</h2>
+        <p class="text-slate-300 leading-relaxed">Access your borrowed books, manage your account, and explore our collection.</p>
       </div>
 
       <!-- Features List -->
-      <div class="space-y-8">
-        <div class="flex items-start space-x-4">
-          <div class="flex-shrink-0 w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center mt-1">
-            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+      <div class="space-y-6">
+        <div class="flex items-start space-x-3">
+          <div class="flex-shrink-0 w-9 h-9 bg-slate-700 rounded-lg flex items-center justify-center mt-0.5">
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
             </svg>
           </div>
           <div>
-            <h3 class="font-bold text-lg mb-1">View Borrowed Books</h3>
-            <p class="text-slate-300">See your current and past loans in one place</p>
+            <h3 class="font-semibold mb-1">View Borrowed Books</h3>
+            <p class="text-slate-300 text-sm">See your current and past loans in one place</p>
           </div>
         </div>
         
-        <div class="flex items-start space-x-4">
-          <div class="flex-shrink-0 w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center mt-1">
-            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+        <div class="flex items-start space-x-3">
+          <div class="flex-shrink-0 w-9 h-9 bg-slate-700 rounded-lg flex items-center justify-center mt-0.5">
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
             </svg>
           </div>
           <div>
-            <h3 class="font-bold text-lg mb-1">Update Your Profile</h3>
-            <p class="text-slate-300">Keep your contact information up to date</p>
+            <h3 class="font-semibold mb-1">Update Your Profile</h3>
+            <p class="text-slate-300 text-sm">Keep your contact information up to date</p>
           </div>
         </div>
         
-        <div class="flex items-start space-x-4">
-          <div class="flex-shrink-0 w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center mt-1">
-            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+        <div class="flex items-start space-x-3">
+          <div class="flex-shrink-0 w-9 h-9 bg-slate-700 rounded-lg flex items-center justify-center mt-0.5">
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
             </svg>
           </div>
           <div>
-            <h3 class="font-bold text-lg mb-1">Explore Collection</h3>
-            <p class="text-slate-300">Search and discover new books and resources</p>
+            <h3 class="font-semibold mb-1">Explore Collection</h3>
+            <p class="text-slate-300 text-sm">Search and discover new books and resources</p>
           </div>
         </div>
       </div>
@@ -100,27 +127,27 @@
   <div class="flex-1 flex items-center justify-center p-6 lg:p-12">
     <div class="w-full max-w-md">
       <!-- Mobile Header -->
-      <div class="lg:hidden text-center mb-10">
+      <div class="lg:hidden text-center mb-8">
         <div class="flex items-center justify-center mb-2">
-          <div class="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center mr-3">
-            <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <div class="w-9 h-9 bg-slate-900 rounded-lg flex items-center justify-center mr-2">
+            <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
               <circle cx="12" cy="12" r="2"/>
             </svg>
           </div>
-          <h1 class="text-2xl font-bold text-slate-900">i-Kalibro</h1>
+          <h1 class="text-xl font-bold text-slate-900">i-Kalibro</h1>
         </div>
-        <p class="text-slate-600">Metro Dagupan Colleges</p>
+        <p class="text-slate-600 text-sm">Metro Dagupan Colleges</p>
       </div>
 
       <!-- Form Header -->
-      <div class="mb-10">
-        <h2 class="text-3xl font-bold text-slate-900 mb-3">Welcome Back!</h2>
+      <div class="mb-8">
+        <h2 class="text-3xl font-bold text-slate-900 mb-2">Welcome Back!</h2>
         <p class="text-slate-600">Please enter your details to sign in</p>
       </div>
 
       <!-- Login Form -->
-      <form class="space-y-6" on:submit|preventDefault={handleSubmit}>
+      <form class="space-y-5" on:submit|preventDefault={handleSubmit}>
         <!-- Username Field -->
         <div>
           <label class="block text-sm font-semibold text-slate-700 mb-2" for="username">
@@ -131,7 +158,7 @@
             type="text"
             required
             bind:value={username}
-            class="w-full px-4 py-3.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent text-base transition-all placeholder-slate-400 shadow-sm"
+            class="w-full px-3.5 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all placeholder-slate-400 shadow-sm"
             placeholder="Enter your username"
           />
         </div>
@@ -147,12 +174,12 @@
               type={showPassword ? 'text' : 'password'}
               required
               bind:value={password}
-              class="w-full px-4 py-3.5 pr-12 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent text-base transition-all placeholder-slate-400 shadow-sm"
+              class="w-full px-3.5 py-3 pr-11 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all placeholder-slate-400 shadow-sm"
               placeholder="Enter your password"
             />
             <button
               type="button"
-              class="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-500 hover:text-slate-700"
+              class="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-500 hover:text-slate-700"
               on:click={() => showPassword = !showPassword}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
@@ -163,6 +190,37 @@
                   <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                   <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                 {/if}
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Math CAPTCHA -->
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-2" for="captcha">
+            Verify you're human
+          </label>
+          <div class="flex items-center gap-2.5">
+            <div class="flex-1 bg-slate-100 border border-slate-200 rounded-lg px-3.5 py-3 flex items-center justify-center">
+              <span class="text-lg font-bold text-slate-900">
+                {num1} + {num2} = ?
+              </span>
+            </div>
+            <input
+              id="captcha"
+              type="number"
+              required
+              bind:value={captchaAnswer}
+              class="w-20 px-3.5 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent transition-all text-center shadow-sm"
+            />
+            <button
+              type="button"
+              on:click={generateMathProblem}
+              class="p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+              title="Generate new problem"
+            >
+              <svg class="h-5 w-5 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
               </svg>
             </button>
           </div>
@@ -193,10 +251,10 @@
         <button
           type="submit"
           disabled={isLoading}
-          class="w-full bg-slate-900 text-white py-3.5 rounded-xl hover:bg-slate-800 transition-colors font-semibold text-base flex items-center justify-center shadow-md disabled:opacity-75"
+          class="w-full bg-slate-900 text-white py-3 rounded-lg hover:bg-slate-800 transition-colors font-semibold flex items-center justify-center shadow-md disabled:opacity-75"
         >
           {#if isLoading}
-            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <svg class="animate-spin -ml-1 mr-2.5 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
@@ -207,7 +265,7 @@
         </button>
 
         <!-- Sign Up Link -->
-        <div class="mt-6 text-center">
+        <div class="mt-5 text-center">
           <p class="text-slate-600 text-sm">
             Don't have an account? 
             <a href="/register" class="ml-1 font-semibold text-slate-900 hover:text-slate-700 transition-colors">
