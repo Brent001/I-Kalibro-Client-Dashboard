@@ -93,11 +93,6 @@
             <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">My Library</h1>
             <p class="text-slate-600 mt-1 sm:mt-2 text-sm sm:text-base">Manage your borrowed books, reservations, and penalties</p>
           </div>
-          <div class="flex items-center">
-            <div class="bg-white rounded-xl shadow-sm px-3 py-2 border border-slate-200">
-              <p class="text-xs sm:text-sm font-medium text-slate-700">Welcome, {currentUser.name}</p>
-            </div>
-          </div>
         </div>
       </div>
 

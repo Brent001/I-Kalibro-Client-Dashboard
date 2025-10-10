@@ -105,10 +105,8 @@ export const POST: RequestHandler = async ({ request }) => {
       return error(404, { message: 'Book not found' });
     }
 
-    // Only allow reservation if no copies are available
-    if (targetBook.copiesAvailable && targetBook.copiesAvailable > 0) {
-      return error(400, { message: 'Book is currently available. Please borrow instead.' });
-    }
+    // REMOVED: The check that prevented reservations when copies are available
+    // Users can now reserve books regardless of availability
 
     // Check if user already has ANY active reservation (for any book)
     const [anyActiveReservation] = await db
@@ -141,6 +139,23 @@ export const POST: RequestHandler = async ({ request }) => {
 
     if (existingReservation) {
       return error(400, { message: 'You already have an active reservation for this book' });
+    }
+
+    // Check if user currently has this book borrowed
+    const [activeBorrowing] = await db
+      .select()
+      .from(bookBorrowing)
+      .where(
+        and(
+          eq(bookBorrowing.userId, userIdNum),
+          eq(bookBorrowing.bookId, bookIdNum),
+          eq(bookBorrowing.status, 'borrowed')
+        )
+      )
+      .limit(1);
+
+    if (activeBorrowing) {
+      return error(400, { message: 'You already have this book borrowed' });
     }
 
     // Find current queue position

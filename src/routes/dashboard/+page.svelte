@@ -2,44 +2,25 @@
   import Layout from "$lib/components/ui/layout.svelte";
   import { page } from "$app/stores";
 
-  // Get user data from page data (passed from +page.server.ts)
+  // Use data from server
   $: user = $page.data?.user;
-
-  // Sample data - in real app this would come from server
-  const myBooks = [
-    { id: 1, title: "Introduction to Algorithms", author: "Thomas H. Cormen", dueDate: "2024-02-15", daysLeft: 5, status: "active" },
-    { id: 2, title: "Clean Code", author: "Robert C. Martin", dueDate: "2024-02-20", daysLeft: 10, status: "active" },
-    { id: 3, title: "The Pragmatic Programmer", author: "Andy Hunt", dueDate: "2024-02-10", daysLeft: -5, status: "overdue" }
-  ];
-
-  const myReservations = [
-    { id: 1, title: "Design Patterns", author: "Gang of Four", reservedDate: "2024-01-25", queuePosition: 2, estimatedDate: "2024-02-18" },
-    { id: 2, title: "JavaScript: The Good Parts", author: "Douglas Crockford", reservedDate: "2024-01-28", queuePosition: 1, estimatedDate: "2024-02-12" }
-  ];
-
-  const recentActivity = [
-    { id: 1, action: "Borrowed", book: "Introduction to Algorithms", date: "2024-01-20", type: "borrow" },
-    { id: 2, action: "Returned", book: "Head First Design Patterns", date: "2024-01-18", type: "return" },
-    { id: 3, action: "Reserved", book: "Design Patterns", date: "2024-01-15", type: "reserve" },
-    { id: 4, action: "Renewed", book: "Clean Code", date: "2024-01-12", type: "renew" }
-  ];
-
-  const penalties = [
-    { id: 1, type: "Late Return", book: "Advanced Mathematics", amount: 25.00, daysOverdue: 5, status: "unpaid" },
-    { id: 2, type: "Late Return", book: "Physics Principles", amount: 15.00, daysOverdue: 3, status: "paid" }
-  ];
+  $: myBooks = $page.data?.myBooks ?? [];
+  $: myReservations = $page.data?.myReservations ?? [];
+  $: recentActivity = $page.data?.recentActivity ?? [];
+  $: penalties = $page.data?.penalties ?? [];
 
   // Calculate stats
-  $: currentBooksCount = myBooks.filter(book => book.status === 'active').length;
+  $: currentBooksCount = myBooks.filter(book => book.status === 'borrowed' || book.status === 'active').length;
   $: overdueCount = myBooks.filter(book => book.status === 'overdue').length;
   $: reservationsCount = myReservations.length;
-  $: unpaidPenalties = penalties.filter(p => p.status === 'unpaid');
-  $: totalUnpaidAmount = unpaidPenalties.reduce((sum, p) => sum + p.amount, 0);
+  $: unpaidPenalties = penalties.filter(p => p.status === 'unpaid' || p.status === 'overdue');
+  $: totalUnpaidAmount = unpaidPenalties.reduce((sum, p) => sum + (p.fine || p.amount || 0), 0);
 
   function getStatusColor(status: string) {
     switch (status) {
       case 'overdue': return 'text-red-600 bg-red-50';
       case 'due-soon': return 'text-orange-600 bg-orange-50';
+      case 'borrowed':
       case 'active': return 'text-green-600 bg-green-50';
       default: return 'text-gray-600 bg-gray-50';
     }
@@ -132,7 +113,7 @@
     </div>
 
     <!-- Main Content Grid -->
-    <div class="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-6">
+    <div class="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3">
       <!-- My Current Books -->
       <div class="bg-white rounded-lg shadow-sm border border-gray-200">
         <div class="p-4 sm:p-6 border-b border-gray-200 flex items-center justify-between">
@@ -215,7 +196,7 @@
     </div>
 
     <!-- Bottom Row -->
-    <div class="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-6">
+    <div class="space-y-4 lg:space-y-0 lg:grid lg:grid-cols-2 lg:gap-3">
       <!-- Recent Activity -->
       <div class="bg-white rounded-lg shadow-sm border border-gray-200">
         <div class="p-4 sm:p-6 border-b border-gray-200 flex items-center justify-between">
