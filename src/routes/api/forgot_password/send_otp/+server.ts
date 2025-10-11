@@ -2,25 +2,51 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
-import { generateOTP, checkRateLimit, otpStorage } from '$lib/server/otpUtils.js';
 import { db } from '$lib/server/db/index.js';
 import { user } from '$lib/server/db/schema/schema.js';
 import { eq, or } from 'drizzle-orm';
+
+// In-memory storage for OTPs
+const otpStorage = new Map<string, { otp: string; expiresAt: number; attempts: number }>();
+const rateLimitStorage = new Map<string, { count: number; resetAt: number }>();
+
+function generateOTP(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function checkRateLimit(identifier: string): boolean {
+  const now = Date.now();
+  const normalizedIdentifier = identifier.toLowerCase();
+  const limit = rateLimitStorage.get(normalizedIdentifier);
+
+  if (!limit || now > limit.resetAt) {
+    rateLimitStorage.set(normalizedIdentifier, { 
+      count: 1, 
+      resetAt: now + 15 * 60 * 1000
+    });
+    return true;
+  }
+
+  if (limit.count >= 5) {
+    return false;
+  }
+
+  limit.count++;
+  return true;
+}
 
 const resend = new Resend(env.VITE_RESEND_API_KEY);
 
 export const POST: RequestHandler = async ({ request }) => {
   try {
-    const { identifier } = await request.json(); // Can be email or username
+    const { identifier } = await request.json();
 
-    // Validate identifier
     if (!identifier || identifier.trim().length === 0) {
       return json({ success: false, message: 'Email or username is required' }, { status: 400 });
     }
 
     const trimmedIdentifier = identifier.trim();
 
-    // Check if identifier exists in database (email or username)
     const [userRow] = await db
       .select({ 
         id: user.id, 
@@ -43,10 +69,8 @@ export const POST: RequestHandler = async ({ request }) => {
       }, { status: 404 });
     }
 
-    // Use the email from database for sending OTP
     const userEmail = userRow.email;
 
-    // Check rate limit (using email for consistency)
     if (!checkRateLimit(userEmail)) {
       return json(
         { success: false, message: 'Too many requests. Please try again in 15 minutes.' },
@@ -54,23 +78,19 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    // Generate OTP
     const otp = generateOTP();
-    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    const expiresAt = Date.now() + 10 * 60 * 1000;
 
-    // Store OTP using email
     otpStorage.set(userEmail.toLowerCase(), { otp, expiresAt, attempts: 0 });
 
-    // Mask email for display (show first 2 chars and domain)
     const maskedEmail = userEmail.replace(/^(.{2})(.*)(@.*)$/, (_, start, middle, domain) => {
       return start + '*'.repeat(middle.length) + domain;
     });
 
-    // Send email using Resend
     try {
       await resend.emails.send({
         from: 'i-Kalibro <onboarding@resend.dev>',
-        to: userEmail, // userEmail is now string
+        to: userEmail,
         subject: 'Password Reset - OTP Verification',
         html: `
           <!DOCTYPE html>
@@ -175,13 +195,13 @@ export const POST: RequestHandler = async ({ request }) => {
         `,
       });
 
-      console.log(`OTP sent to ${userEmail}: ${otp}`); // For development - remove in production
+      console.log(`OTP sent to ${userEmail}: ${otp}`);
 
       return json({ 
         success: true, 
         message: 'OTP has been sent to your email',
-        email: userEmail, // Send actual email to frontend
-        maskedEmail: maskedEmail // Also send masked version for display
+        email: userEmail,
+        maskedEmail: maskedEmail
       });
     } catch (emailError) {
       console.error('Failed to send email:', emailError);
@@ -195,3 +215,6 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({ success: false, message: 'Internal server error' }, { status: 500 });
   }
 };
+
+// Export storage for use by other endpoints
+export { otpStorage };

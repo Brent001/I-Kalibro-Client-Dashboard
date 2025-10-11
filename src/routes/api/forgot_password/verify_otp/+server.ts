@@ -1,6 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { otpStorage } from '$lib/server/otpUtils.js';
+
+// In-memory storage for OTPs (shared across serverless functions via module scope)
+const otpStorage = new Map<string, { otp: string; expiresAt: number; attempts: number }>();
 
 export const POST: RequestHandler = async ({ request }) => {
   try {
@@ -10,7 +12,6 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, message: 'Email and OTP are required' }, { status: 400 });
     }
 
-    // Normalize email to lowercase for consistent lookup
     const normalizedEmail = email.toLowerCase();
     const stored = otpStorage.get(normalizedEmail);
 
@@ -18,13 +19,11 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, message: 'OTP not found or expired. Please request a new one.' }, { status: 404 });
     }
 
-    // Check if OTP expired
     if (Date.now() > stored.expiresAt) {
       otpStorage.delete(normalizedEmail);
       return json({ success: false, message: 'OTP has expired. Please request a new one.' }, { status: 400 });
     }
 
-    // Check attempts (max 5 attempts)
     if (stored.attempts >= 5) {
       otpStorage.delete(normalizedEmail);
       return json(
@@ -33,7 +32,6 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    // Verify OTP
     if (stored.otp !== otp.trim()) {
       stored.attempts++;
       return json(
@@ -45,10 +43,11 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    // OTP verified successfully
     return json({ success: true, message: 'OTP verified successfully' });
   } catch (error) {
     console.error('Verify OTP error:', error);
     return json({ success: false, message: 'Internal server error' }, { status: 500 });
   }
 };
+
+export { otpStorage };

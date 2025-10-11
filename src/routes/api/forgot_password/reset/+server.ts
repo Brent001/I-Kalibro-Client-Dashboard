@@ -3,10 +3,12 @@ import type { RequestHandler } from './$types.js';
 import bcrypt from 'bcrypt';
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
-import { otpStorage } from '$lib/server/otpUtils.js';
 import { db } from '$lib/server/db/index.js';
 import { user } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
+
+// In-memory storage for OTPs (shared across serverless functions via module scope)
+const otpStorage = new Map<string, { otp: string; expiresAt: number; attempts: number }>();
 
 const resend = new Resend(env.VITE_RESEND_API_KEY);
 
@@ -21,7 +23,6 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    // Check if user exists
     const [userRow] = await db
       .select({ id: user.id })
       .from(user)
@@ -32,7 +33,6 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ success: false, message: 'No account found for this email' }, { status: 404 });
     }
 
-    // Validate password strength
     if (newPassword.length < 8) {
       return json(
         { success: false, message: 'Password must be at least 8 characters long' },
@@ -61,39 +61,33 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    const stored = otpStorage.get(email);
+    const stored = otpStorage.get(email.toLowerCase());
 
     if (!stored) {
       return json({ success: false, message: 'OTP not found or expired' }, { status: 404 });
     }
 
-    // Verify OTP one more time
     if (stored.otp !== otp) {
       return json({ success: false, message: 'Invalid OTP' }, { status: 400 });
     }
 
-    // Check if OTP expired
     if (Date.now() > stored.expiresAt) {
-      otpStorage.delete(email);
+      otpStorage.delete(email.toLowerCase());
       return json({ success: false, message: 'OTP has expired' }, { status: 400 });
     }
 
-    // Hash the new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update password in database
     await db
       .update(user)
       .set({ password: hashedPassword })
       .where(eq(user.email, email.toLowerCase()));
 
-    // Remove OTP from storage after successful reset
-    otpStorage.delete(email);
+    otpStorage.delete(email.toLowerCase());
 
-    // Optional: Send confirmation email
     try {
       await resend.emails.send({
-        from: 'i-Kalibro ikalibro@metrodagupancolleges.edu.ph',
+        from: 'i-Kalibro <ikalibro@metrodagupancolleges.edu.ph>',
         to: email,
         subject: 'Password Reset Successful',
         html: `
@@ -152,7 +146,6 @@ export const POST: RequestHandler = async ({ request }) => {
       });
     } catch (emailError) {
       console.error('Failed to send confirmation email:', emailError);
-      // Don't fail the request if confirmation email fails
     }
 
     return json({ success: true, message: 'Password reset successfully' });
@@ -161,3 +154,5 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({ success: false, message: 'Internal server error' }, { status: 500 });
   }
 };
+
+export { otpStorage };
