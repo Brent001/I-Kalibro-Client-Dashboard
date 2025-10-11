@@ -6,9 +6,7 @@ import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db/index.js';
 import { user } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
-
-// In-memory storage for OTPs (shared across serverless functions via module scope)
-const otpStorage = new Map<string, { otp: string; expiresAt: number; attempts: number }>();
+import { redisClient } from '$lib/server/db/cache.js';
 
 const resend = new Resend(env.VITE_RESEND_API_KEY);
 
@@ -61,7 +59,9 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    const stored = otpStorage.get(email.toLowerCase());
+    const key = `otp:${email.toLowerCase()}`;
+    const storedRaw = await redisClient.get(key);
+    const stored = storedRaw ? JSON.parse(storedRaw) : null;
 
     if (!stored) {
       return json({ success: false, message: 'OTP not found or expired' }, { status: 404 });
@@ -72,7 +72,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     if (Date.now() > stored.expiresAt) {
-      otpStorage.delete(email.toLowerCase());
+      await redisClient.del(key);
       return json({ success: false, message: 'OTP has expired' }, { status: 400 });
     }
 
@@ -83,7 +83,7 @@ export const POST: RequestHandler = async ({ request }) => {
       .set({ password: hashedPassword })
       .where(eq(user.email, email.toLowerCase()));
 
-    otpStorage.delete(email.toLowerCase());
+    await redisClient.del(key);
 
     try {
       await resend.emails.send({
@@ -154,5 +154,3 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({ success: false, message: 'Internal server error' }, { status: 500 });
   }
 };
-
-export { otpStorage };

@@ -1,8 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-
-// In-memory storage for OTPs (shared across serverless functions via module scope)
-const otpStorage = new Map<string, { otp: string; expiresAt: number; attempts: number }>();
+import { redisClient } from '$lib/server/db/cache.js';
 
 export const POST: RequestHandler = async ({ request }) => {
   try {
@@ -13,19 +11,21 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     const normalizedEmail = email.toLowerCase();
-    const stored = otpStorage.get(normalizedEmail);
+    const key = `otp:${normalizedEmail}`;
+    const storedRaw = await redisClient.get(key);
+    const stored = storedRaw ? JSON.parse(storedRaw) : null;
 
     if (!stored) {
       return json({ success: false, message: 'OTP not found or expired. Please request a new one.' }, { status: 404 });
     }
 
     if (Date.now() > stored.expiresAt) {
-      otpStorage.delete(normalizedEmail);
+      await redisClient.del(key);
       return json({ success: false, message: 'OTP has expired. Please request a new one.' }, { status: 400 });
     }
 
     if (stored.attempts >= 5) {
-      otpStorage.delete(normalizedEmail);
+      await redisClient.del(key);
       return json(
         { success: false, message: 'Too many failed attempts. Please request a new OTP.' },
         { status: 429 }
@@ -34,6 +34,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
     if (stored.otp !== otp.trim()) {
       stored.attempts++;
+      await redisClient.setex(key, Math.ceil((stored.expiresAt - Date.now()) / 1000), JSON.stringify(stored));
       return json(
         { 
           success: false, 
@@ -49,5 +50,3 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({ success: false, message: 'Internal server error' }, { status: 500 });
   }
 };
-
-export { otpStorage };

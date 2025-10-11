@@ -5,25 +5,20 @@ import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db/index.js';
 import { user } from '$lib/server/db/schema/schema.js';
 import { eq, or } from 'drizzle-orm';
-
-// In-memory storage for OTPs
-const otpStorage = new Map<string, { otp: string; expiresAt: number; attempts: number }>();
-const rateLimitStorage = new Map<string, { count: number; resetAt: number }>();
+import { redisClient } from '$lib/server/db/cache.js';
 
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-function checkRateLimit(identifier: string): boolean {
+async function checkRateLimit(identifier: string): Promise<boolean> {
+  const key = `otp_rate:${identifier.toLowerCase()}`;
+  const data = await redisClient.get(key);
+  let limit = data ? JSON.parse(data) : null;
   const now = Date.now();
-  const normalizedIdentifier = identifier.toLowerCase();
-  const limit = rateLimitStorage.get(normalizedIdentifier);
 
   if (!limit || now > limit.resetAt) {
-    rateLimitStorage.set(normalizedIdentifier, { 
-      count: 1, 
-      resetAt: now + 15 * 60 * 1000
-    });
+    await redisClient.setex(key, 15 * 60, JSON.stringify({ count: 1, resetAt: now + 15 * 60 * 1000 }));
     return true;
   }
 
@@ -32,6 +27,7 @@ function checkRateLimit(identifier: string): boolean {
   }
 
   limit.count++;
+  await redisClient.setex(key, Math.ceil((limit.resetAt - now) / 1000), JSON.stringify(limit));
   return true;
 }
 
@@ -71,7 +67,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
     const userEmail = userRow.email;
 
-    if (!checkRateLimit(userEmail)) {
+    if (!(await checkRateLimit(userEmail))) {
       return json(
         { success: false, message: 'Too many requests. Please try again in 15 minutes.' },
         { status: 429 }
@@ -81,7 +77,11 @@ export const POST: RequestHandler = async ({ request }) => {
     const otp = generateOTP();
     const expiresAt = Date.now() + 10 * 60 * 1000;
 
-    otpStorage.set(userEmail.toLowerCase(), { otp, expiresAt, attempts: 0 });
+    await redisClient.setex(
+      `otp:${userEmail.toLowerCase()}`,
+      10 * 60,
+      JSON.stringify({ otp, expiresAt, attempts: 0 })
+    );
 
     const maskedEmail = userEmail.replace(/^(.{2})(.*)(@.*)$/, (_, start, middle, domain) => {
       return start + '*'.repeat(middle.length) + domain;
@@ -215,6 +215,3 @@ export const POST: RequestHandler = async ({ request }) => {
     return json({ success: false, message: 'Internal server error' }, { status: 500 });
   }
 };
-
-// Export storage for use by other endpoints
-export { otpStorage };
