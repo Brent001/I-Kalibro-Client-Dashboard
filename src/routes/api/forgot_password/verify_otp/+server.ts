@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import { otpStorage } from '$lib/server/otpUtils';
+import { otpStorage } from '$lib/server/otpUtils.js';
 
 export const POST: RequestHandler = async ({ request }) => {
   try {

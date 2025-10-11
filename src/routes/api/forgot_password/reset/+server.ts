@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types.js';
 import bcrypt from 'bcrypt';
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
-import { otpStorage } from '$lib/server/otpUtils';
+import { otpStorage } from '$lib/server/otpUtils.js';
 import { db } from '$lib/server/db/index.js';
 import { user } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';

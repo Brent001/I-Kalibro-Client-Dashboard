@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
-import { generateOTP, checkRateLimit, otpStorage } from '$lib/server/otpUtils';
+import { generateOTP, checkRateLimit, otpStorage } from '$lib/server/otpUtils.js';
 import { db } from '$lib/server/db/index.js';
 import { user } from '$lib/server/db/schema/schema.js';
 import { eq, or } from 'drizzle-orm';
@@ -69,8 +69,8 @@ export const POST: RequestHandler = async ({ request }) => {
     // Send email using Resend
     try {
       await resend.emails.send({
-        from: 'i-Kalibro <onboarding@resend.dev>', // Change to your verified domain
-        to: userEmail,
+        from: 'i-Kalibro <onboarding@resend.dev>',
+        to: userEmail, // userEmail is now string
         subject: 'Password Reset - OTP Verification',
         html: `
           <!DOCTYPE html>
