@@ -242,7 +242,7 @@
             <input type="checkbox" class="rounded border-slate-300 text-slate-900 mr-2 h-4 w-4" />
             Remember for 30 days
           </label>
-          <a href="#" class="text-sm font-medium text-slate-900 hover:text-slate-700 transition-colors">
+          <a href="/forget_password" class="text-sm font-medium text-slate-900 hover:text-slate-700 transition-colors">
             Forgot password?
           </a>
         </div>
