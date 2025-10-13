@@ -2,25 +2,73 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
-import { generateOTP, checkRateLimit, otpStorage } from '$lib/server/otpUtils';
 import { db } from '$lib/server/db/index.js';
 import { user } from '$lib/server/db/schema/schema.js';
 import { eq, or } from 'drizzle-orm';
+import { redisClient } from '$lib/server/db/cache.js';
+
+function generateOTP(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+async function checkRateLimit(identifier: string): Promise<boolean> {
+  const key = `otp_rate:${identifier.toLowerCase()}`;
+  const data = await redisClient.get(key);
+  
+  console.log(`[Rate Limit Check] key: ${key}, data:`, data);
+  
+  let limit = null;
+  
+  if (data) {
+    try {
+      // Data might already be an object or a JSON string
+      if (typeof data === 'string') {
+        limit = JSON.parse(data);
+      } else if (typeof data === 'object') {
+        limit = data;
+      }
+    } catch (parseError) {
+      console.error('[Rate Limit] Failed to parse rate limit data:', parseError);
+      limit = null;
+    }
+  }
+  
+  const now = Date.now();
+
+  if (!limit || now > limit.resetAt) {
+    const newLimit = { count: 1, resetAt: now + 15 * 60 * 1000 };
+    await redisClient.setex(key, 15 * 60, JSON.stringify(newLimit));
+    console.log(`[Rate Limit] New limit set:`, newLimit);
+    return true;
+  }
+
+  if (limit.count >= 5) {
+    console.log(`[Rate Limit] Exceeded for ${identifier}`);
+    return false;
+  }
+
+  limit.count++;
+  const ttl = Math.ceil((limit.resetAt - now) / 1000);
+  await redisClient.setex(key, ttl, JSON.stringify(limit));
+  console.log(`[Rate Limit] Updated count: ${limit.count}`);
+  return true;
+}
 
 const resend = new Resend(env.VITE_RESEND_API_KEY);
 
 export const POST: RequestHandler = async ({ request }) => {
   try {
-    const { identifier } = await request.json(); // Can be email or username
+    const { identifier } = await request.json();
 
-    // Validate identifier
+    console.log(`[Send OTP] Request received for identifier: ${identifier}`);
+
     if (!identifier || identifier.trim().length === 0) {
       return json({ success: false, message: 'Email or username is required' }, { status: 400 });
     }
 
     const trimmedIdentifier = identifier.trim();
 
-    // Check if identifier exists in database (email or username)
+    // Find user by email or username
     const [userRow] = await db
       .select({ 
         id: user.id, 
@@ -37,39 +85,85 @@ export const POST: RequestHandler = async ({ request }) => {
       .limit(1);
 
     if (!userRow) {
+      console.log(`[Send OTP] No user found for: ${trimmedIdentifier}`);
       return json({ 
         success: false, 
         message: 'No account found with this email or username. Please check your credentials or contact support.' 
       }, { status: 404 });
     }
 
-    // Use the email from database for sending OTP
     const userEmail = userRow.email;
+    
+    if (!userEmail) {
+      console.log(`[Send OTP] User has no email address`);
+      return json({ 
+        success: false, 
+        message: 'No email associated with this account.' 
+      }, { status: 400 });
+    }
+    
+    console.log(`[Send OTP] User found, email: ${userEmail}`);
 
-    // Check rate limit (using email for consistency)
-    if (!checkRateLimit(userEmail)) {
+    // Check rate limit
+    if (!(await checkRateLimit(userEmail))) {
       return json(
         { success: false, message: 'Too many requests. Please try again in 15 minutes.' },
         { status: 429 }
       );
     }
 
-    // Generate OTP
+    const key = `otp:${userEmail.toLowerCase()}`;
+    
+    // Delete old OTP if exists (for resend functionality)
+    const existingOTP = await redisClient.get(key);
+    if (existingOTP) {
+      const deleted = await redisClient.del(key);
+      if (deleted) {
+        console.log(`[Send OTP] Deleted old OTP for ${userEmail}`);
+      }
+    }
+
+    // Generate NEW OTP
     const otp = generateOTP();
     const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
-    // Store OTP using email
-    otpStorage.set(userEmail.toLowerCase(), { otp, expiresAt, attempts: 0 });
+    // Store NEW OTP in Redis with attempts counter
+    const otpData = { 
+      otp, 
+      expiresAt, 
+      attempts: 0,
+      email: userEmail.toLowerCase()
+    };
+    
+    const saved = await redisClient.setex(
+      key,
+      10 * 60, // 10 minutes TTL
+      JSON.stringify(otpData)
+    );
 
-    // Mask email for display (show first 2 chars and domain)
+    if (!saved) {
+      console.error('[Send OTP] Failed to save OTP to Redis');
+      return json(
+        { success: false, message: 'Failed to generate OTP. Please try again.' },
+        { status: 500 }
+      );
+    }
+
+    console.log(`[Send OTP] OTP saved to Redis:`, { key, otp, expiresAt });
+
+    // Verify OTP was saved
+    const verification = await redisClient.get(key);
+    console.log(`[Send OTP] Verification read from Redis:`, verification);
+
+    // Mask email for display
     const maskedEmail = userEmail.replace(/^(.{2})(.*)(@.*)$/, (_, start, middle, domain) => {
       return start + '*'.repeat(middle.length) + domain;
     });
 
-    // Send email using Resend
+    // Send email
     try {
       await resend.emails.send({
-        from: 'i-Kalibro <onboarding@resend.dev>', // Change to your verified domain
+        from: 'i-Kalibro <ikalibro@resend.dev>',
         to: userEmail,
         subject: 'Password Reset - OTP Verification',
         html: `
@@ -143,10 +237,7 @@ export const POST: RequestHandler = async ({ request }) => {
               <div class="container">
                 <div class="logo">
                   <div class="logo-box">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                      <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-                      <circle cx="12" cy="12" r="2"/>
-                    </svg>
+                    <img src="https://i-kalibro.netlify.app/assets/logo/logo_email.png" alt="i-Kalibro Logo" width="32" height="32" style="display:block;margin:0 auto;" />
                   </div>
                   <p class="logo-text">i-Kalibro</p>
                 </div>
@@ -175,23 +266,24 @@ export const POST: RequestHandler = async ({ request }) => {
         `,
       });
 
-      console.log(`OTP sent to ${userEmail}: ${otp}`); // For development - remove in production
+      console.log(`[Send OTP] Email sent successfully to ${userEmail}`);
+      console.log(`[Send OTP] OTP for testing: ${otp}`);
 
       return json({ 
         success: true, 
         message: 'OTP has been sent to your email',
-        email: userEmail, // Send actual email to frontend
-        maskedEmail: maskedEmail // Also send masked version for display
+        email: userEmail,
+        maskedEmail: maskedEmail
       });
     } catch (emailError) {
-      console.error('Failed to send email:', emailError);
+      console.error('[Send OTP] Failed to send email:', emailError);
       return json(
         { success: false, message: 'Failed to send email. Please try again later.' },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Send OTP error:', error);
+    console.error('[Send OTP] Error:', error);
     return json({ success: false, message: 'Internal server error' }, { status: 500 });
   }
 };
