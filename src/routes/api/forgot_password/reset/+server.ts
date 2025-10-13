@@ -14,6 +14,8 @@ export const POST: RequestHandler = async ({ request }) => {
   try {
     const { email, otp, newPassword } = await request.json();
 
+    console.log(`[Reset Password] Request received - email: ${email}`);
+
     if (!email || !otp || !newPassword) {
       return json(
         { success: false, message: 'Email, OTP, and new password are required' },
@@ -21,16 +23,25 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedOTP = otp.trim();
+
+    // Validate user exists
     const [userRow] = await db
       .select({ id: user.id })
       .from(user)
-      .where(eq(user.email, email.toLowerCase()))
+      .where(eq(user.email, normalizedEmail))
       .limit(1);
 
     if (!userRow) {
-      return json({ success: false, message: 'No account found for this email' }, { status: 404 });
+      console.log(`[Reset Password] No user found for email: ${normalizedEmail}`);
+      return json({ 
+        success: false, 
+        message: 'No account found for this email' 
+      }, { status: 404 });
     }
 
+    // Validate password requirements
     if (newPassword.length < 8) {
       return json(
         { success: false, message: 'Password must be at least 8 characters long' },
@@ -59,36 +70,73 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    const key = `otp:${email.toLowerCase()}`;
+    // Verify OTP from Redis
+    const key = `otp:${normalizedEmail}`;
+    console.log(`[Reset Password] Checking OTP for key: ${key}`);
+    
     const storedRaw = await redisClient.get(key);
-    const stored = storedRaw ? JSON.parse(storedRaw) : null;
+    console.log(`[Reset Password] OTP data from Redis:`, storedRaw);
 
-    if (!stored) {
-      return json({ success: false, message: 'OTP not found or expired' }, { status: 404 });
+    if (!storedRaw) {
+      console.log(`[Reset Password] No OTP found in Redis`);
+      return json({ 
+        success: false, 
+        message: 'OTP not found or expired. Please request a new one.' 
+      }, { status: 404 });
     }
 
-    if (stored.otp !== otp) {
-      return json({ success: false, message: 'Invalid OTP' }, { status: 400 });
-    }
-
-    if (Date.now() > stored.expiresAt) {
+    let stored;
+    try {
+      stored = JSON.parse(storedRaw);
+    } catch (parseError) {
+      console.error(`[Reset Password] Failed to parse OTP data:`, parseError);
       await redisClient.del(key);
-      return json({ success: false, message: 'OTP has expired' }, { status: 400 });
+      return json({ 
+        success: false, 
+        message: 'Invalid OTP data. Please request a new one.' 
+      }, { status: 500 });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    // Verify OTP matches
+    if (stored.otp !== normalizedOTP) {
+      console.log(`[Reset Password] OTP mismatch - Expected: ${stored.otp}, Got: ${normalizedOTP}`);
+      return json({ 
+        success: false, 
+        message: 'Invalid OTP. Please verify your OTP again.' 
+      }, { status: 400 });
+    }
 
+    // Check if OTP expired
+    if (Date.now() > stored.expiresAt) {
+      console.log(`[Reset Password] OTP expired`);
+      await redisClient.del(key);
+      return json({ 
+        success: false, 
+        message: 'OTP has expired. Please request a new one.' 
+      }, { status: 400 });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    console.log(`[Reset Password] Password hashed successfully`);
+
+    // Update password in database
     await db
       .update(user)
       .set({ password: hashedPassword })
-      .where(eq(user.email, email.toLowerCase()));
+      .where(eq(user.email, normalizedEmail));
 
+    console.log(`[Reset Password] Password updated in database for ${normalizedEmail}`);
+
+    // Delete OTP from Redis after successful reset
     await redisClient.del(key);
+    console.log(`[Reset Password] OTP deleted from Redis`);
 
+    // Send confirmation email
     try {
       await resend.emails.send({
-        from: 'i-Kalibro <ikalibro@metrodagupancolleges.edu.ph>',
-        to: email,
+        from: 'i-Kalibro <ikalibro@resend.dev>',
+        to: normalizedEmail,
         subject: 'Password Reset Successful',
         html: `
           <!DOCTYPE html>
@@ -122,20 +170,44 @@ export const POST: RequestHandler = async ({ request }) => {
                   font-size: 12px;
                   color: #64748b;
                 }
+                .logo {
+                  display: flex;
+                  align-items: center;
+                  margin-bottom: 20px;
+                }
+                .logo-box {
+                  background: #ffffff;
+                  border-radius: 50%;
+                  padding: 10px;
+                  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                  margin-right: 10px;
+                }
+                .logo img {
+                  display: block;
+                  margin: 0 auto;
+                }
+                .logo-text {
+                  font-size: 24px;
+                  font-weight: 600;
+                  color: #0f172a;
+                  margin: 0;
+                }
               </style>
             </head>
             <body>
               <div class="container">
+                <div class="logo">
+                  <div class="logo-box">
+                    <img src="https://i-kalibro.netlify.app/assets/logo/logo_email.png" alt="i-Kalibro Logo" width="32" height="32" style="display:block;margin:0 auto;" />
+                  </div>
+                  <p class="logo-text">i-Kalibro</p>
+                </div>
                 <h2 style="color: #0f172a;">Password Reset Successful</h2>
-                
                 <div class="success-box">
                   <strong>✓ Your password has been successfully reset.</strong>
                 </div>
-                
                 <p>You can now log in to your i-Kalibro account using your new password.</p>
-                
                 <p>If you did not perform this action, please contact our support team immediately.</p>
-                
                 <div class="footer">
                   <p>© 2025 i-Kalibro Library Management System<br>Metro Dagupan Colleges</p>
                 </div>
@@ -144,13 +216,21 @@ export const POST: RequestHandler = async ({ request }) => {
           </html>
         `,
       });
+      console.log(`[Reset Password] Confirmation email sent to ${normalizedEmail}`);
     } catch (emailError) {
-      console.error('Failed to send confirmation email:', emailError);
+      console.error('[Reset Password] Failed to send confirmation email:', emailError);
+      // Don't fail the request if email fails
     }
 
-    return json({ success: true, message: 'Password reset successfully' });
+    return json({ 
+      success: true, 
+      message: 'Password reset successfully' 
+    });
   } catch (error) {
-    console.error('Reset password error:', error);
-    return json({ success: false, message: 'Internal server error' }, { status: 500 });
+    console.error('[Reset Password] Error:', error);
+    return json({ 
+      success: false, 
+      message: 'Internal server error' 
+    }, { status: 500 });
   }
 };
