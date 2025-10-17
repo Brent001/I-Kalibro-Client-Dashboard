@@ -184,7 +184,82 @@
     }
   }
 
+  // Add for custom dropdown
+  let showCourseDropdown = false;
+  let showYearDropdown = false;
+
+  let courseOptions = [
+    { value: "BSBA-MM", label: "BSBA - Marketing Management" },
+    { value: "BSBA-FM", label: "BSBA - Financial Management" },
+    { value: "BSCS", label: "BS Computer Science" },
+    { value: "BSCrim", label: "BS Criminology" },
+    { value: "BPEd", label: "Bachelor of Physical Education" },
+    { value: "BSEd-Filipino", label: "BSEd - Filipino" },
+    { value: "BSEd-English", label: "BSEd - English" },
+    { value: "BSEd-Math", label: "BSEd - Mathematics" },
+    { value: "BSEd-Science", label: "BSEd - Science and Technology" },
+    { value: "BSEd-TLE-IA", label: "BSEd-TLE - Industrial Arts" },
+    { value: "BSEd-TLE-HE", label: "BSEd-TLE - Home Economics" },
+    { value: "BEEd", label: "Bachelor of Elementary Education" },
+    { value: "BSTrM", label: "BS Tourism Management" }
+  ];
+
+  let yearOptions = [
+    { value: "1st Year", label: "1st Year" },
+    { value: "2nd Year", label: "2nd Year" },
+    { value: "3rd Year", label: "3rd Year" },
+    { value: "4th Year", label: "4th Year" }
+  ];
+
+  function selectCourse(option) {
+    formData.course = option.value;
+    showCourseDropdown = false;
+    clearError('course');
+  }
+
+  function getCourseLabel(value) {
+    const found = courseOptions.find(opt => opt.value === value);
+    return found ? truncateLabel(found.label) : "Select Course";
+  }
+
+  function selectYear(option) {
+    formData.year = option.value;
+    showYearDropdown = false;
+    clearError('year');
+  }
+
+  function getYearLabel(value) {
+    const found = yearOptions.find(opt => opt.value === value);
+    return found ? found.label : "Select Year Level";
+  }
+
+  function truncateLabel(label: string, max = 28) {
+    return label.length > max ? label.slice(0, max - 3) + "..." : label;
+  }
+
   $: progressPercentage = (currentStep / totalSteps) * 100;
+
+  // Password strength indicator
+  $: passwordStrength = getPasswordStrength(formData.password);
+
+  function getPasswordStrength(password: string) {
+    if (!password) return { label: '', color: '' };
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/[a-z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+
+    if (score <= 2) return { label: 'Weak', color: 'red' };
+    if (score === 3) return { label: 'Medium', color: 'amber' };
+    if (score >= 4) return { label: 'Strong', color: 'green' };
+    return { label: '', color: '' };
+  }
+
+  // Password visibility toggle
+  let showPassword = false;
+  let showConfirmPassword = false;
 </script>
 
 <svelte:head>
@@ -498,13 +573,48 @@
                     </div>
                     <input
                       id="password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       bind:value={formData.password}
                       on:input={() => clearError('password')}
-                      class="block w-full pl-10 pr-3 py-2 border {errors.password ? 'border-red-300' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      class="block w-full pl-10 pr-10 py-2 border {errors.password ? 'border-red-300' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                       placeholder="Create a strong password"
                     />
+                    <button
+                      type="button"
+                      class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 focus:outline-none"
+                      tabindex="-1"
+                      on:click={() => showPassword = !showPassword}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {#if showPassword}
+                        <!-- Eye open icon -->
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-.5 1.57-1.5 3.03-2.958 4.03M15.5 15.5l-1.5-1.5"/>
+                        </svg>
+                      {:else}
+                        <!-- Eye closed icon -->
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a10.05 10.05 0 012.541-4.03M6.7 6.7A9.956 9.956 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.956 9.956 0 01-1.357 2.568M3 3l18 18"/>
+                        </svg>
+                      {/if}
+                    </button>
                   </div>
+                  <!-- Password strength indicator -->
+                  {#if passwordStrength.label}
+                    <div class="mt-1 flex items-center space-x-2">
+                      <div class="h-2 w-24 rounded-full bg-gray-200 overflow-hidden">
+                        <div
+                          class="h-2 rounded-full transition-all"
+                          style="width: {passwordStrength.label === 'Weak' ? '33%' : passwordStrength.label === 'Medium' ? '66%' : '100%'}; background-color: {passwordStrength.color === 'red' ? '#ef4444' : passwordStrength.color === 'amber' ? '#f59e42' : '#22c55e'}"
+                        ></div>
+                      </div>
+                      <span class="text-xs font-medium"
+                        style="color: {passwordStrength.color === 'red' ? '#ef4444' : passwordStrength.color === 'amber' ? '#f59e42' : '#22c55e'}">
+                        {passwordStrength.label}
+                      </span>
+                    </div>
+                  {/if}
                   {#if errors.password}
                     <p class="mt-1 text-sm text-red-600">{errors.password}</p>
                   {/if}
@@ -524,12 +634,32 @@
                     </div>
                     <input
                       id="confirmPassword"
-                      type="password"
+                      type={showConfirmPassword ? "text" : "password"}
                       bind:value={formData.confirmPassword}
                       on:input={() => clearError('confirmPassword')}
-                      class="block w-full pl-10 pr-3 py-2 border {errors.confirmPassword ? 'border-red-300' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      class="block w-full pl-10 pr-10 py-2 border {errors.confirmPassword ? 'border-red-300' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                       placeholder="Confirm your password"
                     />
+                    <button
+                      type="button"
+                      class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 focus:outline-none"
+                      tabindex="-1"
+                      on:click={() => showConfirmPassword = !showConfirmPassword}
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                    >
+                      {#if showConfirmPassword}
+                        <!-- Eye open icon -->
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-.5 1.57-1.5 3.03-2.958 4.03M15.5 15.5l-1.5-1.5"/>
+                        </svg>
+                      {:else}
+                        <!-- Eye closed icon -->
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a10.05 10.05 0 012.541-4.03M6.7 6.7A9.956 9.956 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.956 9.956 0 01-1.357 2.568M3 3l18 18"/>
+                        </svg>
+                      {/if}
+                    </button>
                   </div>
                   {#if errors.confirmPassword}
                     <p class="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
@@ -569,9 +699,20 @@
                         id="enrollmentNo"
                         type="text"
                         bind:value={formData.enrollmentNo}
-                        on:input={() => clearError('enrollmentNo')}
+                        on:input={e => {
+                          // Remove all non-digits
+                          let value = e.target.value.replace(/\D/g, '');
+                          // Limit to 10 digits (4 + 6)
+                          value = value.slice(0, 10);
+                          // Insert hyphen after 4 digits if enough digits are present
+                          if (value.length > 4) {
+                            value = value.slice(0, 4) + '-' + value.slice(4);
+                          }
+                          formData.enrollmentNo = value;
+                          clearError('enrollmentNo');
+                        }}
                         class="block w-full pl-10 pr-3 py-2 border {errors.enrollmentNo ? 'border-red-300' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                        placeholder="202X-XXXXX"
+                        placeholder="2024-123456"
                       />
                     </div>
                     {#if errors.enrollmentNo}
@@ -585,17 +726,41 @@
                       Course <span class="text-red-500">*</span>
                     </label>
                     <div class="relative">
-                      <select
-                        id="course"
-                        bind:value={formData.course}
-                        on:change={() => clearError('course')}
-                        class="block w-full px-3 py-2 border {errors.course ? 'border-red-300' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white"
+                      <button
+                        type="button"
+                        class="block w-full px-3 py-2 border {errors.course ? 'border-red-300' : 'border-gray-300'} rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors truncate"
+                        on:click={() => showCourseDropdown = !showCourseDropdown}
+                        aria-haspopup="listbox"
+                        aria-expanded={showCourseDropdown}
+                        style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                       >
-                        <option value="">Select your course</option>
-                        {#each courses as course}
-                          <option value={course}>{course}</option>
-                        {/each}
-                      </select>
+                        <span class="{formData.course ? 'text-gray-900' : 'text-gray-400'}">
+                          {getCourseLabel(formData.course)}
+                        </span>
+                        <svg class="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      </button>
+                      {#if showCourseDropdown}
+                        <ul
+                          class="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                          tabindex="-1"
+                          role="listbox"
+                        >
+                          {#each courseOptions as option}
+                            <li
+                              class="px-4 py-2 cursor-pointer hover:bg-blue-50 {formData.course === option.value ? 'bg-blue-100 font-semibold' : ''} truncate"
+                              style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                              on:click={() => selectCourse(option)}
+                              role="option"
+                              aria-selected={formData.course === option.value}
+                              title={option.label}
+                            >
+                              {truncateLabel(option.label)}
+                            </li>
+                          {/each}
+                        </ul>
+                      {/if}
                     </div>
                     {#if errors.course}
                       <p class="mt-1 text-sm text-red-600">{errors.course}</p>
@@ -608,17 +773,40 @@
                       Year Level <span class="text-red-500">*</span>
                     </label>
                     <div class="relative">
-                      <select
-                        id="year"
-                        bind:value={formData.year}
-                        on:change={() => clearError('year')}
-                        class="block w-full px-3 py-2 border {errors.year ? 'border-red-300' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-white"
+                      <button
+                        type="button"
+                        class="block w-full px-3 py-2 border {errors.year ? 'border-red-300' : 'border-gray-300'} rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors truncate"
+                        on:click={() => showYearDropdown = !showYearDropdown}
+                        aria-haspopup="listbox"
+                        aria-expanded={showYearDropdown}
+                        style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
                       >
-                        <option value="">Select year level</option>
-                        {#each years as year}
-                          <option value={year}>{year}</option>
-                        {/each}
-                      </select>
+                        <span class="{formData.year ? 'text-gray-900' : 'text-gray-400'}">
+                          {getYearLabel(formData.year)}
+                        </span>
+                        <svg class="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      </button>
+                      {#if showYearDropdown}
+                        <ul
+                          class="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                          tabindex="-1"
+                          role="listbox"
+                        >
+                          {#each yearOptions as option}
+                            <li
+                              class="px-4 py-2 cursor-pointer hover:bg-blue-50 {formData.year === option.value ? 'bg-blue-100 font-semibold' : ''} truncate"
+                              style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                              on:click={() => selectYear(option)}
+                              role="option"
+                              aria-selected={formData.year === option.value}
+                            >
+                              {option.label}
+                            </li>
+                          {/each}
+                        </ul>
+                      {/if}
                     </div>
                     {#if errors.year}
                       <p class="mt-1 text-sm text-red-600">{errors.year}</p>

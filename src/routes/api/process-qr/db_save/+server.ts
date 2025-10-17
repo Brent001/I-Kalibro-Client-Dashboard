@@ -33,6 +33,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     const body = await request.json();
     const username = body.username || userRow.username;
     const fullName = body.fullName || userRow.name;
+    const visitorType = body.visitorType || userRow.role || 'user'; // fallback to user role or 'user'
 
     // Check for recent entries to prevent duplicates
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes ago
@@ -55,13 +56,15 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       }, { status: 409 }); // 409 Conflict
     }
 
-    // Insert new library visit
+    // Insert new library visit (fill all fields)
     const [newVisit] = await db.insert(libraryVisit).values({
       userId,
       username,
       fullName,
+      visitorType,
       timeIn: new Date(),
-      status: 'checked_in'
+      timeOut: null,
+      createdAt: new Date()
     }).returning({
       id: libraryVisit.id,
       timeIn: libraryVisit.timeIn

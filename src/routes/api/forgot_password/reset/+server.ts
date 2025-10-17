@@ -135,7 +135,7 @@ export const POST: RequestHandler = async ({ request }) => {
     // Send confirmation email
     try {
       await resend.emails.send({
-        from: 'i-Kalibro <ikalibro@resend.dev>',
+        from: 'i-Kalibro <no-reply@i-kalibro.online>',
         to: normalizedEmail,
         subject: 'Password Reset Successful',
         html: `
