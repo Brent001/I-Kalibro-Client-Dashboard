@@ -97,10 +97,11 @@ async function authenticateUser(request: Request): Promise<AuthenticatedUser | n
 
 export const GET: RequestHandler = async ({ request }) => {
   try {
-    const user = await authenticateUser(request);
-    if (!user) {
-      throw error(401, { message: 'Unauthorized' });
-    }
+    // REMOVE authentication for GET
+    // const user = await authenticateUser(request);
+    // if (!user) {
+    //   throw error(401, { message: 'Unauthorized' });
+    // }
 
     // Fetch categories from the database
     const categoriesResult = await db
