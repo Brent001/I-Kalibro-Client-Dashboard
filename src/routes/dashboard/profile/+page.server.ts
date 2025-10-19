@@ -9,10 +9,16 @@ export const load: PageServerLoad = async ({ cookies, fetch }) => {
     if (!token) throw redirect(302, '/');
 
     try {
-        jwt.verify(token, JWT_SECRET);
+        // Decode and verify JWT
+        const decoded = jwt.verify(token, JWT_SECRET) as any;
+        const userId = decoded.userId || decoded.id;
+        if (!userId) {
+            cookies.delete('client_token', { path: '/' });
+            throw redirect(302, '/');
+        }
 
-        // Fetch dashboard data from API
-        const res = await fetch('/api/dashboard', {
+        // Fetch user profile
+        const res = await fetch('/api/profile', {
             headers: { authorization: `Bearer ${token}` }
         });
 
@@ -20,16 +26,24 @@ export const load: PageServerLoad = async ({ cookies, fetch }) => {
         const data = await res.json();
         if (!data.success) throw redirect(302, '/');
 
-        // Pass all dashboard data to the page
+        // Optionally fetch stats
+        let stats = {};
+        const statsRes = await fetch('/api/dashboard/stats', {
+            headers: { authorization: `Bearer ${token}` }
+        });
+        if (statsRes.ok) {
+            const statsData = await statsRes.json();
+            if (statsData.success) stats = statsData.stats;
+        }
+
         return {
             user: data.user,
-            myBooks: data.borrowedBooks,
-            myReservations: data.reservations,
-            recentActivity: data.activities,
-            penalties: data.penalties
+            stats
         };
-    } catch {
-        cookies.delete('token', { path: '/' });
+    } catch (error) {
+        if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
+            cookies.delete('client_token', { path: '/' });
+        }
         throw redirect(302, '/');
     }
 };

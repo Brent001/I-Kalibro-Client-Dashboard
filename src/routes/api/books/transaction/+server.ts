@@ -108,23 +108,7 @@ export const POST: RequestHandler = async ({ request }) => {
     // REMOVED: The check that prevented reservations when copies are available
     // Users can now reserve books regardless of availability
 
-    // Check if user already has ANY active reservation (for any book)
-    const [anyActiveReservation] = await db
-      .select()
-      .from(bookReservation)
-      .where(
-        and(
-          eq(bookReservation.userId, userIdNum),
-          eq(bookReservation.status, 'active')
-        )
-      )
-      .limit(1);
-
-    if (anyActiveReservation) {
-      return error(400, { message: 'You can only reserve one book at a time. Please cancel your existing reservation first.' });
-    }
-
-    // Check if user already has an active reservation for this book (redundant, but safe)
+    // Check if user already has an active reservation for this book
     const [existingReservation] = await db
       .select()
       .from(bookReservation)

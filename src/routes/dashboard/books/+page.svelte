@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { browser } from '$app/environment';
   import Layout from "$lib/components/ui/layout.svelte";
+  import BookModal from '$lib/components/ui/BookModal.svelte';
   
   export let data;
   const currentUser = data.user;
@@ -40,16 +41,51 @@
                   book.copiesAvailable > 0 ? 'Limited' : 'Unavailable';
   });
 
+  // FIXED: Get token from cookie for API calls
+  function getAuthToken(): string | null {
+    if (!browser) return null;
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'client_token') {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  // FIXED: Include authentication token in API calls
   async function apiCall(endpoint: string, method: string = 'GET', body?: any) {
+    const token = getAuthToken();
     const options: RequestInit = {
       method,
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json'
+      }
     };
+    
+    // Add authorization header if token exists
+    if (token) {
+      (options.headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+    }
+    
     if (body) options.body = JSON.stringify(body);
+    
     const response = await fetch(endpoint, options);
     const data = await response.json();
-    if (!response.ok) throw new Error(data.message || 'Request failed');
+    
+    if (!response.ok) {
+      console.error('API Error:', {
+        status: response.status,
+        message: data.message,
+        endpoint,
+        method,
+        body
+      });
+      throw new Error(data.message || 'Request failed');
+    }
+    
     return data;
   }
 
@@ -63,6 +99,7 @@
         alreadyBorrowed = borrowedBookIds.includes(selectedBook.id);
       }
     } catch (err) {
+      console.error('Error fetching user book status:', err);
       reservedBookIds = [];
       borrowedBookIds = [];
       alreadyReserved = false;
@@ -101,6 +138,7 @@
     }
   }
 
+  // FIXED: Ensure proper type conversion and error handling
   async function handleBookAction(book: Book) {
     if (actionLoading) return;
     if (reservedBookIds.includes(book.id)) {
@@ -111,19 +149,36 @@
       error = "You have already borrowed this book.";
       return;
     }
+    
     const confirmMsg = `Reserve "${book.title}"? You'll be notified when available.`;
     if (!confirm(confirmMsg)) return;
+    
     actionLoading = true;
+    error = ""; // Clear previous errors
+    
     try {
-      const data = await apiCall('/api/books/transaction', 'POST', {
-        bookId: book.id,
-        userId: currentUser.id
-      });
+      // FIXED: Ensure values are properly typed as numbers
+      const reservationData = {
+        bookId: Number(book.id),
+        userId: Number(currentUser.id)
+      };
+      
+      console.log('Reserving book:', reservationData);
+      
+      const data = await apiCall('/api/books/transaction', 'POST', reservationData);
+      
       alert(`Successfully reserved "${book.title}". Queue position: ${data.data.queuePosition}`);
       selectedBook = null;
+      
+      // Refresh the book list and user status
       await fetchBooks(currentPage);
+      
     } catch (err) {
-      error = err instanceof Error ? err.message : `Failed to reserve book`;
+      console.error('Reservation error:', err);
+      error = err instanceof Error ? err.message : 'Failed to reserve book';
+      
+      // Show error in alert as well for better visibility
+      alert(`Error: ${error}`);
     } finally {
       actionLoading = false;
     }
@@ -185,6 +240,7 @@
       }
       categoriesLoaded = true;
     } catch (err) {
+      console.error('Error fetching categories:', err);
       categories = [];
       categoriesLoaded = true;
     }
@@ -216,9 +272,9 @@
 
 <Layout>
   <div class="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-    <div class="max-w-7xl mx-auto px-3 py-6 sm:px-6 sm:py-10">
+    <div class="max-w-7xl mx-auto px-1 py-3 sm:px-3 sm:py-5">
       <!-- Enhanced Header Section -->
-      <div class="mb-6 sm:mb-10">
+      <div class="mb-3 sm:mb-5">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <h1 class="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">Library Collection</h1>
@@ -675,124 +731,14 @@
 
     <!-- Enhanced Book Details Modal -->
     {#if selectedBook}
-      <div class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn" on:click={() => selectedBook = null}>
-        <div class="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-slideUp" on:click|stopPropagation>
-          <!-- Modal Header -->
-          <div class="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-start justify-between z-10">
-            <div class="flex-1 pr-4">
-              <h3 class="text-2xl font-bold text-slate-900 leading-tight">{selectedBook.title}</h3>
-              <p class="text-slate-600 mt-1">by {selectedBook.author}</p>
-            </div>
-            <button 
-              on:click={() => selectedBook = null} 
-              class="flex-shrink-0 text-slate-400 hover:text-slate-600 hover:bg-slate-100 p-2 rounded-lg transition-all" 
-              aria-label="Close"
-            >
-              <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <!-- Modal Body -->
-          <div class="p-6 space-y-6">
-            <!-- Status Badge -->
-            <div>
-              <span class={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold border ${getStatusColor(selectedBook.status || 'Unknown')}`}>
-                <span class="w-2 h-2 rounded-full mr-2 {selectedBook.status === 'Available' ? 'bg-emerald-500' : selectedBook.status === 'Limited' ? 'bg-amber-500' : 'bg-slate-500'}"></span>
-                {selectedBook.status}
-              </span>
-            </div>
-
-            <!-- Book Details Grid -->
-            <div class="grid grid-cols-2 gap-4 bg-slate-50 rounded-xl p-5">
-              <div class="flex flex-col">
-                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Book ID</span>
-                <span class="text-slate-900 font-medium">{selectedBook.bookId}</span>
-              </div>
-              <div class="flex flex-col">
-                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Published Year</span>
-                <span class="text-slate-900 font-medium">{selectedBook.publishedYear}</span>
-              </div>
-              <div class="flex flex-col">
-                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Copies Available</span>
-                <span class="text-slate-900 font-medium {selectedBook.copiesAvailable > 5 ? 'text-emerald-600' : selectedBook.copiesAvailable > 0 ? 'text-amber-600' : 'text-slate-400'}">
-                  {selectedBook.copiesAvailable}
-                </span>
-              </div>
-              {#if selectedBook.language}
-                <div class="flex flex-col">
-                  <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Language</span>
-                  <span class="text-slate-900 font-medium">{selectedBook.language}</span>
-                </div>
-              {/if}
-              {#if selectedBook.category}
-                <div class="flex flex-col">
-                  <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Category</span>
-                  <span class="text-slate-900 font-medium">{selectedBook.category}</span>
-                </div>
-              {/if}
-              {#if selectedBook.publisher}
-                <div class="flex flex-col">
-                  <span class="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Publisher</span>
-                  <span class="text-slate-900 font-medium">{selectedBook.publisher}</span>
-                </div>
-              {/if}
-            </div>
-
-            <!-- Description -->
-            {#if selectedBook.description}
-              <div>
-                <h4 class="text-sm font-bold text-slate-700 uppercase tracking-wide mb-2">Description</h4>
-                <p class="text-slate-600 leading-relaxed">{selectedBook.description}</p>
-              </div>
-            {/if}
-
-            <!-- Location -->
-            {#if selectedBook.location}
-              <div class="flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <svg class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                </svg>
-                <div>
-                  <p class="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Location</p>
-                  <p class="text-blue-900 font-medium">{selectedBook.location}</p>
-                </div>
-              </div>
-            {/if}
-          </div>
-
-          <!-- Modal Footer -->
-          <div class="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 flex flex-col sm:flex-row gap-3">
-            <button
-              on:click={() => selectedBook && handleBookAction(selectedBook)}
-              disabled={actionLoading || !selectedBook || reservedBookIds.includes(selectedBook?.id || 0) || borrowedBookIds.includes(selectedBook?.id || 0)}
-              class={`flex-1 py-3.5 px-6 font-semibold rounded-xl transition-all text-sm
-                ${selectedBook && borrowedBookIds.includes(selectedBook.id)
-                  ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
-                  : selectedBook && reservedBookIds.includes(selectedBook.id)
-                    ? 'bg-slate-800 text-white hover:bg-slate-700 shadow-md'
-                    : 'bg-slate-900 text-white hover:bg-slate-800 shadow-lg hover:shadow-xl'}
-                disabled:opacity-70`}
-            >
-              {#if selectedBook && borrowedBookIds.includes(selectedBook.id)}
-                ✓ Already Borrowed
-              {:else if selectedBook && reservedBookIds.includes(selectedBook.id)}
-                ✓ Reserved
-              {:else}
-                {actionLoading ? 'Processing...' : 'Reserve This Book'}
-              {/if}
-            </button>
-            <button
-              on:click={() => selectedBook = null}
-              class="px-6 py-3.5 border-2 border-slate-300 text-slate-700 font-semibold rounded-xl hover:bg-white hover:border-slate-400 transition-all text-sm"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
+      <BookModal
+        book={selectedBook}
+        reservedBookIds={reservedBookIds}
+        borrowedBookIds={borrowedBookIds}
+        actionLoading={actionLoading}
+        onClose={() => selectedBook = null}
+        onReserve={handleBookAction}
+      />
     {/if}
   </div>
 </Layout>

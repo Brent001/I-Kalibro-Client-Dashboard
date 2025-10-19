@@ -78,6 +78,32 @@
     }
   }
 
+  async function deleteTransaction(id: number, type: string) {
+    if (type === 'reserved') {
+      // Find the reservation by id
+      const reservation = reservedBooks.find(r => r.id === id);
+      if (!reservation) {
+        error = 'Reservation not found';
+        return;
+      }
+      if (!confirm(`Cancel reservation for "${reservation.bookTitle}"?`)) return;
+      loading = true;
+      try {
+        await apiCall('/api/books/transaction/cancel_reserve', 'POST', {
+          bookId: reservation.bookId,
+          userId: currentUser.id
+        });
+        // Remove from reservedBooks list
+        reservedBooks = reservedBooks.filter(r => r.id !== id);
+      } catch (err) {
+        error = err instanceof Error ? err.message : 'Failed to cancel reservation';
+      } finally {
+        loading = false;
+      }
+    }
+    // ...handle other types if needed...
+  }
+
   onMount(() => {
     fetchIssuedBooks();
   });
@@ -85,9 +111,9 @@
 
 <Layout>
   <div class="min-h-screen bg-white">
-    <div class="max-w-full mx-auto px-2 py-4 sm:px-4 sm:py-8">
+    <div class="max-w-7xl mx-auto px-1 py-3 sm:px-3 sm:py-5">
       <!-- Header Section -->
-      <div class="mb-4 sm:mb-8">
+      <div class="mb-3 sm:mb-5">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <h1 class="text-2xl sm:text-3xl font-bold text-slate-900">My Library</h1>
