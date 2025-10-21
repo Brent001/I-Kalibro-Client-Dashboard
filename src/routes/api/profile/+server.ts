@@ -1,13 +1,13 @@
 import type { RequestHandler } from './$types.js';
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db/index.js';
-import { user } from '$lib/server/db/schema/schema.js';
+import { user, student, faculty } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
-// GET - Fetch user profile
+// GET - Fetch user profile (student/faculty)
 export const GET: RequestHandler = async ({ cookies }) => {
   try {
     const token = cookies.get('client_token');
@@ -22,22 +22,31 @@ export const GET: RequestHandler = async ({ cookies }) => {
     }
 
     // Fetch user data
-    const userData = await db
+    const [userData] = await db
       .select()
       .from(user)
       .where(eq(user.id, userId))
       .limit(1);
 
-    if (!userData || userData.length === 0) {
+    if (!userData) {
       return json({ success: false, message: 'User not found' }, { status: 404 });
     }
 
+    // Fetch student/faculty info
+    let extraInfo = null;
+    if (userData.role === 'student') {
+      [extraInfo] = await db.select().from(student).where(eq(student.userId, userId)).limit(1);
+    } else if (userData.role === 'faculty') {
+      [extraInfo] = await db.select().from(faculty).where(eq(faculty.userId, userId)).limit(1);
+    }
+
     // Remove password from response
-    const { password, ...userWithoutPassword } = userData[0];
+    const { password, ...userWithoutPassword } = userData;
 
     return json({
       success: true,
-      user: userWithoutPassword
+      user: userWithoutPassword,
+      extraInfo
     });
   } catch (error) {
     console.error('Error fetching profile:', error);
@@ -63,7 +72,7 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
     }
 
     const body = await request.json();
-    const { name, email, phone } = body;
+    const { name, email, phone, gender, age, department, course, year, enrollmentNo, facultyNumber } = body;
 
     // Validate required fields
     if (!name || name.trim() === '') {
@@ -105,24 +114,44 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
       .set(updateData)
       .where(eq(user.id, userId));
 
+    // Update student/faculty info
+    const [userRow] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
+    let extraInfo = null;
+    if (userRow.role === 'student') {
+      await db.update(student).set({
+        gender: gender || null,
+        age: age !== undefined ? age : null,
+        department: department || null,
+        course: course || null,
+        year: year || null,
+        enrollmentNo: enrollmentNo || null
+      }).where(eq(student.userId, userId));
+      [extraInfo] = await db.select().from(student).where(eq(student.userId, userId)).limit(1);
+    } else if (userRow.role === 'faculty') {
+      await db.update(faculty).set({
+        gender: gender || null,
+        age: age !== undefined ? age : null,
+        department: department || null,
+        facultyNumber: facultyNumber || null
+      }).where(eq(faculty.userId, userId));
+      [extraInfo] = await db.select().from(faculty).where(eq(faculty.userId, userId)).limit(1);
+    }
+
     // Fetch updated user data
-    const updatedUser = await db
+    const [updatedUser] = await db
       .select()
       .from(user)
       .where(eq(user.id, userId))
       .limit(1);
 
-    if (!updatedUser || updatedUser.length === 0) {
-      return json({ success: false, message: 'User not found after update' }, { status: 404 });
-    }
-
     // Remove password from response
-    const { password, ...userWithoutPassword } = updatedUser[0];
+    const { password, ...userWithoutPassword } = updatedUser;
 
     return json({
       success: true,
       message: 'Profile updated successfully',
-      user: userWithoutPassword
+      user: userWithoutPassword,
+      extraInfo
     });
   } catch (error) {
     console.error('Error updating profile:', error);

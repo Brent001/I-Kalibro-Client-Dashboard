@@ -42,16 +42,12 @@ async function authenticateUser(request: Request): Promise<AuthenticatedUser | n
         username: user.username,
         email: user.email,
         role: user.role,
-        isActive: user.isActive,
-        tokenVersion: user.tokenVersion
+        isActive: user.isActive
       })
       .from(user)
       .where(eq(user.id, userId))
       .limit(1);
     if (!userRow || !userRow.isActive) return null;
-    if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== userRow.tokenVersion) {
-      return null;
-    }
     return {
       id: userRow.id,
       role: userRow.role || '',
@@ -75,7 +71,7 @@ export const GET: RequestHandler = async ({ request }) => {
 
     // Total available copies
     const availableCopiesResult = await db.select({ total: sum(book.copiesAvailable) }).from(book);
-    const availableCopies = availableCopiesResult[0]?.total || 0;
+    const availableCopies = Number(availableCopiesResult[0]?.total) || 0;
 
     // Currently borrowed books (active borrow transactions)
     const borrowedBooksResult = await db
@@ -92,7 +88,6 @@ export const GET: RequestHandler = async ({ request }) => {
     const lowStockResult = await db
       .select({ count: count() })
       .from(book)
-      .where(gt(book.copiesAvailable, 0))
       .where(gt(3, book.copiesAvailable));
     const lowStock = lowStockResult[0]?.count || 0;
 
@@ -104,14 +99,14 @@ export const GET: RequestHandler = async ({ request }) => {
     const outOfStock = outOfStockResult[0]?.count || 0;
 
     // Total physical copies (available + borrowed)
-    const totalPhysicalCopies = Number(availableCopies) + borrowedBooks;
+    const totalPhysicalCopies = availableCopies + borrowedBooks;
 
     return json({
       success: true,
       data: {
         totalBooks,
         totalPhysicalCopies,
-        availableCopies: Number(availableCopies),
+        availableCopies,
         borrowedBooks,
         categoriesCount,
         lowStock,
@@ -122,7 +117,6 @@ export const GET: RequestHandler = async ({ request }) => {
     });
   } catch (err) {
     console.error('Error fetching statistics:', err);
-    if (err.status) throw err;
     throw error(500, { message: 'Internal server error' });
   }
 };

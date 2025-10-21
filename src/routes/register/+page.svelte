@@ -14,7 +14,8 @@
     course: '',
     year: '',
     department: '',
-    designation: ''
+    facultyNumber: '', // Add this for faculty if needed
+    gender: ''
   };
 
   let errors: Record<string, string> = {};
@@ -91,9 +92,9 @@
         if (!formData.year) stepErrors.year = 'Year level is required';
       } else {
         if (!formData.department) stepErrors.department = 'Department is required';
-        if (!formData.designation.trim()) stepErrors.designation = 'Designation is required';
+        // Remove designation validation
+        // if (!formData.designation.trim()) stepErrors.designation = 'Designation is required';
       }
-      
       if (!agreedToTerms) {
         stepErrors.terms = 'You must agree to the Terms of Service and Privacy Policy';
       }
@@ -125,7 +126,7 @@
   function getStepFields(step: number): string[] {
     if (step === 1) return ['name', 'email', 'phone', 'age'];
     if (step === 2) return ['username', 'password', 'confirmPassword'];
-    if (step === 3) return ['enrollmentNo', 'course', 'year', 'department', 'designation', 'terms'];
+    if (step === 3) return ['enrollmentNo', 'course', 'year', 'department', 'terms']; // Remove 'designation'
     return [];
   }
 
@@ -136,7 +137,7 @@
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
-    
+
     clearStepErrors(3);
     if (!validateStep(3)) return;
 
@@ -145,25 +146,31 @@
     submitSuccess = '';
 
     try {
+      const payload: Record<string, any> = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        username: formData.username,
+        password: formData.password,
+        role: formData.role,
+        age: formData.age || null,
+        enrollmentNo: formData.role === 'student' ? formData.enrollmentNo : null,
+        course: formData.role === 'student' ? formData.course : null,
+        year: formData.role === 'student' ? formData.year : null,
+        department: formData.role === 'faculty' ? formData.department : (formData.role === 'student' ? formData.department : null),
+        facultyNumber: formData.role === 'faculty' ? formData.facultyNumber || null : null,
+        gender: formData.gender || null
+      };
+
+      // Remove designation if not in schema
+      // delete payload.designation;
+
       const response = await fetch('/api/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          phone: formData.phone,
-          username: formData.username,
-          password: formData.password,
-          role: formData.role,
-          age: formData.age || null,
-          enrollmentNo: formData.role === 'student' ? formData.enrollmentNo : null,
-          course: formData.role === 'student' ? formData.course : null,
-          year: formData.role === 'student' ? formData.year : null,
-          department: formData.role === 'faculty' ? formData.department : null,
-          designation: formData.role === 'faculty' ? formData.designation : null
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
@@ -187,6 +194,7 @@
   // Add for custom dropdown
   let showCourseDropdown = false;
   let showYearDropdown = false;
+  let showGenderDropdown = false;
 
   let courseOptions = [
     { value: "BSBA-MM", label: "BSBA - Marketing Management" },
@@ -211,26 +219,48 @@
     { value: "4th Year", label: "4th Year" }
   ];
 
-  function selectCourse(option) {
+  let genderOptions = [
+    { value: "", label: "Select gender" },
+    { value: "Male", label: "Male" },
+    { value: "Female", label: "Female" },
+    { value: "Other", label: "Other" },
+    { value: "Prefer not to say", label: "Prefer not to say" }
+  ];
+
+  type CourseOption = { value: string; label: string };
+  type YearOption = { value: string; label: string };
+
+  function selectCourse(option: CourseOption) {
     formData.course = option.value;
     showCourseDropdown = false;
     clearError('course');
   }
 
-  function getCourseLabel(value) {
-    const found = courseOptions.find(opt => opt.value === value);
+  function getCourseLabel(value: string) {
+    const found = courseOptions.find((opt: CourseOption) => opt.value === value);
     return found ? truncateLabel(found.label) : "Select Course";
   }
 
-  function selectYear(option) {
+  function selectYear(option: YearOption) {
     formData.year = option.value;
     showYearDropdown = false;
     clearError('year');
   }
 
-  function getYearLabel(value) {
-    const found = yearOptions.find(opt => opt.value === value);
+  function getYearLabel(value: string) {
+    const found = yearOptions.find((opt: YearOption) => opt.value === value);
     return found ? found.label : "Select Year Level";
+  }
+
+  function selectGender(option: { value: string; label: string }) {
+    formData.gender = option.value;
+    showGenderDropdown = false;
+    clearError('gender');
+  }
+
+  function getGenderLabel(value: string) {
+    const found = genderOptions.find(opt => opt.value === value);
+    return found ? found.label : "Select gender";
   }
 
   function truncateLabel(label: string, max = 28) {
@@ -480,6 +510,53 @@
                   </div>
                   {#if errors.age}
                     <p class="mt-1 text-sm text-red-600">{errors.age}</p>
+                  {/if}
+                </div>
+
+                <!-- Gender (Custom Dropdown) -->
+                <div class="sm:col-span-1">
+                  <label for="gender" class="block text-sm font-medium text-gray-700 mb-2">
+                    Gender (Optional)
+                  </label>
+                  <div class="relative">
+                    <button
+                      type="button"
+                      class="block w-full px-3 py-2 border {errors.gender ? 'border-red-300' : 'border-gray-300'} rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors truncate"
+                      on:click={() => showGenderDropdown = !showGenderDropdown}
+                      aria-haspopup="listbox"
+                      aria-expanded={showGenderDropdown}
+                      style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                    >
+                      <span class="{formData.gender ? 'text-gray-900' : 'text-gray-400'}">
+                        {getGenderLabel(formData.gender)}
+                      </span>
+                      <svg class="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </button>
+                    {#if showGenderDropdown}
+                      <ul
+                        class="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto"
+                        tabindex="-1"
+                        role="listbox"
+                      >
+                        {#each genderOptions as option}
+                          <li
+                            class="px-4 py-2 cursor-pointer hover:bg-blue-50 {formData.gender === option.value ? 'bg-blue-100 font-semibold' : ''} truncate"
+                            style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"
+                            on:click={() => selectGender(option)}
+                            role="option"
+                            aria-selected={formData.gender === option.value}
+                            title={option.label}
+                          >
+                            {option.label}
+                          </li>
+                        {/each}
+                      </ul>
+                    {/if}
+                  </div>
+                  {#if errors.gender}
+                    <p class="mt-1 text-sm text-red-600">{errors.gender}</p>
                   {/if}
                 </div>
               </div>
@@ -839,10 +916,10 @@
                     {/if}
                   </div>
 
-                  <!-- Designation -->
+                  <!-- Faculty Number (Optional) -->
                   <div>
-                    <label for="designation" class="block text-sm font-medium text-gray-700 mb-2">
-                      Position/Designation <span class="text-red-500">*</span>
+                    <label for="facultyNumber" class="block text-sm font-medium text-gray-700 mb-2">
+                      Faculty Number (Optional)
                     </label>
                     <div class="relative">
                       <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -851,16 +928,16 @@
                         </svg>
                       </div>
                       <input
-                        id="designation"
+                        id="facultyNumber"
                         type="text"
-                        bind:value={formData.designation}
-                        on:input={() => clearError('designation')}
-                        class="block w-full pl-10 pr-3 py-2 border {errors.designation ? 'border-red-300' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                        placeholder="e.g., Professor, Assistant Professor, Librarian"
+                        bind:value={formData.facultyNumber}
+                        on:input={() => clearError('facultyNumber')}
+                        class="block w-full pl-10 pr-3 py-2 border {errors.facultyNumber ? 'border-red-300' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        placeholder="e.g., 12345"
                       />
                     </div>
-                    {#if errors.designation}
-                      <p class="mt-1 text-sm text-red-600">{errors.designation}</p>
+                    {#if errors.facultyNumber}
+                      <p class="mt-1 text-sm text-red-600">{errors.facultyNumber}</p>
                     {/if}
                   </div>
                 </div>

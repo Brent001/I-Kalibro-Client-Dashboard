@@ -23,9 +23,9 @@ export const load: PageServerLoad = async ({ cookies, fetch }) => {
         // Pass all dashboard data to the page
         return {
             user: data.user,
-            myBooks: data.borrowedBooks,
-            myReservations: data.reservations,
-            recentActivity: data.activities,
+            borrowedBooks: data.borrowedBooks,
+            reservations: data.reservations,
+            activities: data.activities,
             penalties: data.penalties
         };
     } catch {

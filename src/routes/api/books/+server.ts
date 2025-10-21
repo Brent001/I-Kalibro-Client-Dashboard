@@ -56,10 +56,6 @@ async function authenticateUser(request: Request): Promise<AuthenticatedUser | n
 
     if (!userRow || !userRow.isActive) return null;
 
-    if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== userRow.tokenVersion) {
-      return null;
-    }
-
     return {
       id: userRow.id,
       role: userRow.role || '',

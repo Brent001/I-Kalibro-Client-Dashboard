@@ -2,18 +2,35 @@
   import Layout from "$lib/components/ui/layout.svelte";
   import { page } from "$app/stores";
 
+  // Define types for borrowed books and penalties
+  type BorrowedBook = {
+    status: string;
+    daysLeft: number;
+    title: string;
+    author: string;
+    dueDate: string;
+  };
+
+  type Penalty = {
+    status: string;
+    fine?: number;
+    amount?: number;
+    title: string;
+    dueDate: string;
+  };
+
   // Use data from server
   $: user = $page.data?.user;
-  $: myBooks = $page.data?.myBooks ?? [];
-  $: myReservations = $page.data?.myReservations ?? [];
-  $: recentActivity = $page.data?.recentActivity ?? [];
-  $: penalties = $page.data?.penalties ?? [];
+  $: myBooks = ($page.data?.borrowedBooks ?? []) as BorrowedBook[];
+  $: myReservations = $page.data?.reservations ?? [];
+  $: recentActivity = $page.data?.activities ?? [];
+  $: penalties = ($page.data?.penalties ?? []) as Penalty[];
 
   // Calculate stats
-  $: currentBooksCount = myBooks.filter(book => book.status === 'borrowed' || book.status === 'active').length;
-  $: overdueCount = myBooks.filter(book => book.status === 'overdue').length;
+  $: currentBooksCount = myBooks.filter((book) => book.status === 'borrowed' || book.status === 'active').length;
+  $: overdueCount = myBooks.filter((book) => book.status === 'overdue').length;
   $: reservationsCount = myReservations.length;
-  $: unpaidPenalties = penalties.filter(p => p.status === 'unpaid' || p.status === 'overdue');
+  $: unpaidPenalties = penalties.filter((p) => p.status === 'unpaid' || p.status === 'overdue');
   $: totalUnpaidAmount = unpaidPenalties.reduce((sum, p) => sum + (p.fine || p.amount || 0), 0);
 
   function getStatusColor(status: string) {
@@ -54,6 +71,9 @@
           {user?.role === 'student' ? user?.course || 'Student' : user?.department || 'Faculty'}
           {#if user?.enrollmentNo}
             &nbsp;|&nbsp;ID: {user.enrollmentNo}
+          {/if}
+          {#if user?.facultyNumber}
+            &nbsp;|&nbsp;Faculty No: {user.facultyNumber}
           {/if}
         </div>
       </div>
@@ -175,9 +195,9 @@
                   <p class="text-xs sm:text-sm text-gray-600 mt-1">by {reservation.author}</p>
                   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-2 space-y-2 sm:space-y-0">
                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 w-fit">
-                      Position #{reservation.queuePosition} in queue
+                      {reservation.status}
                     </span>
-                    <span class="text-xs text-gray-500 flex-shrink-0">Est: {reservation.estimatedDate}</span>
+                    <span class="text-xs text-gray-500 flex-shrink-0">Reserved: {reservation.reservedDate}</span>
                   </div>
                 </div>
               </div>
@@ -212,10 +232,9 @@
                 <div class="w-2 h-2 {activity.type === 'borrow' ? 'bg-blue-500' : activity.type === 'return' ? 'bg-green-500' : activity.type === 'reserve' ? 'bg-purple-500' : 'bg-orange-500'} rounded-full mt-2 flex-shrink-0"></div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium text-gray-900">
-                    <span class="{activity.type === 'borrow' ? 'text-blue-600' : activity.type === 'return' ? 'text-green-600' : activity.type === 'reserve' ? 'text-purple-600' : 'text-orange-600'}">{activity.action}</span>
-                    {activity.book}
+                    <span class="{activity.type === 'borrow' ? 'text-blue-600' : activity.type === 'return' ? 'text-green-600' : activity.type === 'reserve' ? 'text-purple-600' : 'text-orange-600'}">{activity.details}</span>
                   </p>
-                  <p class="text-xs text-gray-500 mt-1">{activity.date}</p>
+                  <p class="text-xs text-gray-500 mt-1">{activity.timestamp}</p>
                 </div>
               </div>
             </div>
@@ -235,15 +254,15 @@
           {#each penalties as penalty}
             <div class="p-3 sm:p-4 hover:bg-gray-50 transition-colors duration-150">
               <div class="flex items-start space-x-3">
-                <div class="w-2 h-2 {penalty.status === 'unpaid' ? 'bg-red-500' : 'bg-green-500'} rounded-full mt-2 flex-shrink-0"></div>
+                <div class="w-2 h-2 {penalty.status === 'unpaid' || penalty.status === 'overdue' ? 'bg-red-500' : 'bg-green-500'} rounded-full mt-2 flex-shrink-0"></div>
                 <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-gray-900">{penalty.type}</p>
-                  <p class="text-xs sm:text-sm text-gray-600 mt-1">{penalty.book}</p>
+                  <p class="text-sm font-medium text-gray-900">{penalty.title}</p>
+                  <p class="text-xs sm:text-sm text-gray-600 mt-1">Due: {penalty.dueDate}</p>
                   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-2 space-y-2 sm:space-y-0">
-                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {penalty.status === 'unpaid' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'} w-fit">
-                      {penalty.status === 'unpaid' ? 'Unpaid' : 'Paid'}
+                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {penalty.status === 'unpaid' || penalty.status === 'overdue' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'} w-fit">
+                      {penalty.status === 'unpaid' || penalty.status === 'overdue' ? 'Unpaid' : 'Paid'}
                     </span>
-                    <span class="text-sm font-semibold text-gray-900">{formatCurrency(penalty.amount)}</span>
+                    <span class="text-sm font-semibold text-gray-900">{formatCurrency(penalty.fine)}</span>
                   </div>
                 </div>
               </div>

@@ -36,6 +36,7 @@ export const POST: RequestHandler = async ({ request }) => {
       console.log(`[Verify OTP] Parsed OTP data:`, stored);
     } catch (parseError) {
       console.error(`[Verify OTP] Failed to parse Redis data:`, parseError);
+      await redisClient.del(key);
       return json({ 
         success: false, 
         message: 'Invalid OTP data. Please request a new one.' 
@@ -67,12 +68,13 @@ export const POST: RequestHandler = async ({ request }) => {
       stored.attempts = (stored.attempts || 0) + 1;
       const remainingAttempts = 5 - stored.attempts;
       
-      console.log(`[Verify OTP] Invalid OTP - Attempts: ${stored.attempts}, Remaining: ${remainingAttempts}`);
+      console.log(`[Verify OTP] Invalid OTP - Expected: ${stored.otp}, Got: ${normalizedOTP}, Attempts: ${stored.attempts}, Remaining: ${remainingAttempts}`);
       
       // Update attempts in Redis
       const ttl = Math.ceil((stored.expiresAt - Date.now()) / 1000);
       if (ttl > 0) {
         await redisClient.setex(key, ttl, JSON.stringify(stored));
+        console.log(`[Verify OTP] Updated attempts in Redis`);
       }
       
       return json(

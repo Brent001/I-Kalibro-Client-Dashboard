@@ -21,12 +21,7 @@ async function checkRateLimit(identifier: string): Promise<boolean> {
   
   if (data) {
     try {
-      // Data might already be an object or a JSON string
-      if (typeof data === 'string') {
-        limit = JSON.parse(data);
-      } else if (typeof data === 'object') {
-        limit = data;
-      }
+      limit = JSON.parse(data);
     } catch (parseError) {
       console.error('[Rate Limit] Failed to parse rate limit data:', parseError);
       limit = null;
@@ -104,23 +99,24 @@ export const POST: RequestHandler = async ({ request }) => {
     
     console.log(`[Send OTP] User found, email: ${userEmail}`);
 
+    // Normalize email for Redis key
+    const normalizedEmail = userEmail.toLowerCase().trim();
+
     // Check rate limit
-    if (!(await checkRateLimit(userEmail))) {
+    if (!(await checkRateLimit(normalizedEmail))) {
       return json(
         { success: false, message: 'Too many requests. Please try again in 15 minutes.' },
         { status: 429 }
       );
     }
 
-    const key = `otp:${userEmail.toLowerCase()}`;
+    const key = `otp:${normalizedEmail}`;
     
     // Delete old OTP if exists (for resend functionality)
     const existingOTP = await redisClient.get(key);
     if (existingOTP) {
-      const deleted = await redisClient.del(key);
-      if (deleted) {
-        console.log(`[Send OTP] Deleted old OTP for ${userEmail}`);
-      }
+      await redisClient.del(key);
+      console.log(`[Send OTP] Deleted old OTP for ${normalizedEmail}`);
     }
 
     // Generate NEW OTP
@@ -132,7 +128,7 @@ export const POST: RequestHandler = async ({ request }) => {
       otp, 
       expiresAt, 
       attempts: 0,
-      email: userEmail.toLowerCase()
+      email: normalizedEmail
     };
     
     const saved = await redisClient.setex(
@@ -156,7 +152,7 @@ export const POST: RequestHandler = async ({ request }) => {
     console.log(`[Send OTP] Verification read from Redis:`, verification);
 
     // Mask email for display
-    const maskedEmail = userEmail.replace(/^(.{2})(.*)(@.*)$/, (_, start, middle, domain) => {
+    const maskedEmail = normalizedEmail.replace(/^(.{2})(.*)(@.*)$/, (_, start, middle, domain) => {
       return start + '*'.repeat(middle.length) + domain;
     });
 
@@ -164,7 +160,7 @@ export const POST: RequestHandler = async ({ request }) => {
     try {
       await resend.emails.send({
         from: 'i-Kalibro <no-reply@i-kalibro.online>',
-        to: userEmail,
+        to: normalizedEmail,
         subject: 'Password Reset - OTP Verification',
         html: `
           <!DOCTYPE html>
@@ -266,17 +262,19 @@ export const POST: RequestHandler = async ({ request }) => {
         `,
       });
 
-      console.log(`[Send OTP] Email sent successfully to ${userEmail}`);
+      console.log(`[Send OTP] Email sent successfully to ${normalizedEmail}`);
       console.log(`[Send OTP] OTP for testing: ${otp}`);
 
       return json({ 
         success: true, 
         message: 'OTP has been sent to your email',
-        email: userEmail,
+        email: normalizedEmail,
         maskedEmail: maskedEmail
       });
     } catch (emailError) {
       console.error('[Send OTP] Failed to send email:', emailError);
+      // Delete the OTP if email fails
+      await redisClient.del(key);
       return json(
         { success: false, message: 'Failed to send email. Please try again later.' },
         { status: 500 }

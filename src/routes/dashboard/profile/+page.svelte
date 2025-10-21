@@ -12,14 +12,32 @@
   let editForm = {
     name: user?.name || '',
     email: user?.email || '',
-    phone: user?.phone || ''
+    phone: user?.phone || '',
+    // Student fields
+    gender: user?.gender || '',
+    age: user?.age || '',
+    department: user?.department || '',
+    course: user?.course || '',
+    year: user?.year || '',
+    enrollmentNo: user?.enrollmentNo || '',
+    // Faculty fields
+    facultyNumber: user?.facultyNumber || '',
+    designation: user?.designation || ''
   };
 
   function startEdit() {
     editForm = {
       name: user?.name || '',
       email: user?.email || '',
-      phone: user?.phone || ''
+      phone: user?.phone || '',
+      gender: user?.gender || '',
+      age: user?.age || '',
+      department: user?.department || '',
+      course: user?.course || '',
+      year: user?.year || '',
+      enrollmentNo: user?.enrollmentNo || '',
+      facultyNumber: user?.facultyNumber || '',
+      designation: user?.designation || ''
     };
     isEditing = true;
     message = '';
@@ -34,11 +52,39 @@
     isSaving = true;
     message = '';
 
+    // Only send relevant fields based on role
+    let payload: Record<string, any> = {
+      name: editForm.name,
+      email: editForm.email,
+      phone: editForm.phone
+    };
+
+    if (user?.role === 'student') {
+      payload = {
+        ...payload,
+        gender: editForm.gender,
+        age: editForm.age,
+        department: editForm.department,
+        course: editForm.course,
+        year: editForm.year,
+        enrollmentNo: editForm.enrollmentNo
+      };
+    } else if (user?.role === 'faculty') {
+      payload = {
+        ...payload,
+        gender: editForm.gender,
+        age: editForm.age,
+        department: editForm.department,
+        facultyNumber: editForm.facultyNumber,
+        designation: editForm.designation
+      };
+    }
+
     try {
       const response = await fetch('/api/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm)
+        body: JSON.stringify(payload)
       });
 
       const data = await response.json();
@@ -46,7 +92,7 @@
       if (data.success) {
         message = 'Profile updated successfully';
         isEditing = false;
-        if (data.user) user = data.user;
+        if (data.user) user = { ...user, ...data.user, ...data.extraInfo };
         setTimeout(() => message = '', 3000);
       } else {
         message = data.message || 'Failed to update profile';
@@ -81,6 +127,9 @@
           {/if}
           {#if user?.enrollmentNo}
             &nbsp;|&nbsp;ID: {user.enrollmentNo}
+          {/if}
+          {#if user?.facultyNumber}
+            &nbsp;|&nbsp;Faculty No: {user.facultyNumber}
           {/if}
         </div>
       </div>
@@ -175,6 +224,97 @@
                   class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent text-sm"
                 />
               </div>
+              {#if user?.role === 'student'}
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                  <input 
+                    type="text" 
+                    bind:value={editForm.gender}
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                  <input 
+                    type="number" 
+                    bind:value={editForm.age}
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                  <input 
+                    type="text" 
+                    bind:value={editForm.department}
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Course</label>
+                  <input 
+                    type="text" 
+                    bind:value={editForm.course}
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Year</label>
+                  <input 
+                    type="text" 
+                    bind:value={editForm.year}
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Enrollment No</label>
+                  <input 
+                    type="text" 
+                    bind:value={editForm.enrollmentNo}
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent text-sm"
+                  />
+                </div>
+              {:else}
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                  <input 
+                    type="text" 
+                    bind:value={editForm.gender}
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                  <input 
+                    type="number" 
+                    bind:value={editForm.age}
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                  <input 
+                    type="text" 
+                    bind:value={editForm.department}
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Faculty Number</label>
+                  <input 
+                    type="text" 
+                    bind:value={editForm.facultyNumber}
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Designation</label>
+                  <input 
+                    type="text" 
+                    bind:value={editForm.designation}
+                    class="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-slate-500 focus:border-transparent text-sm"
+                  />
+                </div>
+              {/if}
             </div>
             <div class="flex justify-end gap-2 pt-2">
               <button 
@@ -234,20 +374,34 @@
                   <p class="text-xs text-gray-600 font-medium mb-1">Year</p>
                   <p class="text-sm text-gray-900">{user?.year || 'N/A'}</p>
                 </div>
-                {#if user?.age}
-                  <div>
-                    <p class="text-xs text-gray-600 font-medium mb-1">Age</p>
-                    <p class="text-sm text-gray-900">{user.age}</p>
-                  </div>
-                {/if}
-              {:else}
+                <div>
+                  <p class="text-xs text-gray-600 font-medium mb-1">Gender</p>
+                  <p class="text-sm text-gray-900">{user?.gender || 'N/A'}</p>
+                </div>
+                <div>
+                  <p class="text-xs text-gray-600 font-medium mb-1">Age</p>
+                  <p class="text-sm text-gray-900">{user?.age || 'N/A'}</p>
+                </div>
+              {:else if user?.role === 'faculty'}
+                <div>
+                  <p class="text-xs text-gray-600 font-medium mb-1">Faculty Number</p>
+                  <p class="text-sm text-gray-900">{user?.facultyNumber || 'N/A'}</p>
+                </div>
+                <div>
+                  <p class="text-xs text-gray-600 font-medium mb-1">Designation</p>
+                  <p class="text-sm text-gray-900">{user?.designation || 'N/A'}</p>
+                </div>
                 <div>
                   <p class="text-xs text-gray-600 font-medium mb-1">Department</p>
                   <p class="text-sm text-gray-900">{user?.department || 'N/A'}</p>
                 </div>
                 <div>
-                  <p class="text-xs text-gray-600 font-medium mb-1">Designation</p>
-                  <p class="text-sm text-gray-900">{user?.designation || 'N/A'}</p>
+                  <p class="text-xs text-gray-600 font-medium mb-1">Gender</p>
+                  <p class="text-sm text-gray-900">{user?.gender || 'N/A'}</p>
+                </div>
+                <div>
+                  <p class="text-xs text-gray-600 font-medium mb-1">Age</p>
+                  <p class="text-sm text-gray-900">{user?.age || 'N/A'}</p>
                 </div>
               {/if}
             </div>

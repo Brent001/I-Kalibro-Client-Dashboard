@@ -26,6 +26,12 @@ export const load: PageServerLoad = async ({ cookies, fetch }) => {
         const data = await res.json();
         if (!data.success) throw redirect(302, '/');
 
+        // Merge extraInfo into user for easier access in Svelte page
+        let mergedUser = data.user;
+        if (data.extraInfo) {
+            mergedUser = { ...data.user, ...data.extraInfo };
+        }
+
         // Optionally fetch stats
         let stats = {};
         const statsRes = await fetch('/api/dashboard/stats', {
@@ -37,7 +43,7 @@ export const load: PageServerLoad = async ({ cookies, fetch }) => {
         }
 
         return {
-            user: data.user,
+            user: mergedUser,
             stats
         };
     } catch (error) {

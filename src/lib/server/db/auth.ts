@@ -2,7 +2,7 @@
 import jwt from 'jsonwebtoken';
 import { randomBytes, createHash } from 'crypto';
 import { db } from '$lib/server/db/index.js';
-import { account } from '$lib/server/db/schema/schema.js';
+import { staffAccount } from '$lib/server/db/schema/schema.js'; // <-- changed from account to staffAccount
 import { eq, and, gte, desc } from 'drizzle-orm';
 import { redisClient } from '$lib/server/db/cache.js';
 
@@ -81,15 +81,15 @@ export async function verifyToken(token: string, tokenType: 'access' | 'refresh'
         // Fetch current user data from database
         const [user] = await db
             .select({
-                id: account.id,
-                name: account.name,
-                username: account.username,
-                email: account.email,
-                role: account.role,
-                isActive: account.isActive
+                id: staffAccount.id,
+                name: staffAccount.name,
+                username: staffAccount.username,
+                email: staffAccount.email,
+                role: staffAccount.role,
+                isActive: staffAccount.isActive
             })
-            .from(account)
-            .where(eq(account.id, decoded.userId))
+            .from(staffAccount)
+            .where(eq(staffAccount.id, decoded.userId))
             .limit(1);
 
         if (!user || !user.isActive) {
@@ -211,15 +211,15 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
         // Get fresh user data
         const [user] = await db
             .select({
-                id: account.id,
-                name: account.name,
-                username: account.username,
-                email: account.email,
-                role: account.role,
-                isActive: account.isActive
+                id: staffAccount.id,
+                name: staffAccount.name,
+                username: staffAccount.username,
+                email: staffAccount.email,
+                role: staffAccount.role,
+                isActive: staffAccount.isActive
             })
-            .from(account)
-            .where(eq(account.id, decoded.userId))
+            .from(staffAccount)
+            .where(eq(staffAccount.id, decoded.userId))
             .limit(1);
 
         if (!user || !user.isActive) {

@@ -11,6 +11,11 @@ export const actions = {
     // Ensure correct role/type mapping
     payload.type = payload.role || 'student';
 
+    // Remove designation if not in schema
+    if (payload.type === 'faculty') {
+      delete payload.designation;
+    }
+
     try {
       const res = await fetch('/api/register', {
         method: 'POST',

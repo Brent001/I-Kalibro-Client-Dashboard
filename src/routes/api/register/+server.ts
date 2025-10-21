@@ -1,7 +1,7 @@
-import { json, error } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { user } from '$lib/server/db/schema/schema.js';
+import { user, student, faculty } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 
@@ -73,14 +73,12 @@ export const POST: RequestHandler = async ({ request }) => {
       if (!body.department) {
         return json({ success: false, message: 'Department is required for faculty' }, { status: 400 });
       }
-      if (!body.designation?.trim()) {
-        return json({ success: false, message: 'Designation is required for faculty' }, { status: 400 });
-      }
     }
 
     // Age validation if provided
+    let age: number | null = null;
     if (body.age !== undefined && body.age !== null && body.age !== '') {
-      const age = parseInt(body.age);
+      age = parseInt(body.age);
       if (isNaN(age) || age < 16 || age > 100) {
         return json({ success: false, message: 'Age must be between 16 and 100' }, { status: 400 });
       }
@@ -100,9 +98,17 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // For students, check enrollment number uniqueness
     if (userRole === 'student' && body.enrollmentNo) {
-      const enrollmentExists = await db.select({ id: user.id }).from(user).where(eq(user.enrollmentNo, body.enrollmentNo)).limit(1);
+      const enrollmentExists = await db.select({ id: student.id }).from(student).where(eq(student.enrollmentNo, body.enrollmentNo)).limit(1);
       if (enrollmentExists.length > 0) {
         return json({ success: false, message: 'Enrollment number is already registered' }, { status: 409 });
+      }
+    }
+
+    // For faculty, check faculty number uniqueness if provided
+    if (userRole === 'faculty' && body.facultyNumber) {
+      const facultyNumberExists = await db.select({ id: faculty.id }).from(faculty).where(eq(faculty.facultyNumber, body.facultyNumber)).limit(1);
+      if (facultyNumberExists.length > 0) {
+        return json({ success: false, message: 'Faculty number is already registered' }, { status: 409 });
       }
     }
 
@@ -110,42 +116,48 @@ export const POST: RequestHandler = async ({ request }) => {
     const passwordSalt = await bcrypt.genSalt(12);
     const hashedPassword = await bcrypt.hash(body.password, passwordSalt);
 
-    // Prepare insert data according to schema
-    const insertData: any = {
+    // Insert into user table
+    const [newUser] = await db.insert(user).values({
       name: body.name.trim(),
       email: body.email.toLowerCase().trim(),
       phone: body.phone?.trim() || null,
       username: body.username.toLowerCase().trim(),
       password: hashedPassword,
       role: userRole,
-      age: body.age ? parseInt(body.age) : null,
-      enrollmentNo: userRole === 'student' ? body.enrollmentNo.trim() : null,
-      course: userRole === 'student' ? body.course : null,
-      year: userRole === 'student' ? body.year : null,
-      department: userRole === 'faculty' ? body.department : null,
-      designation: userRole === 'faculty' ? body.designation.trim() : null,
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date()
-    };
-
-    // Insert new user
-    const [newUser] = await db.insert(user).values(insertData).returning({
+    }).returning({
       id: user.id,
       name: user.name,
       email: user.email,
       phone: user.phone,
       username: user.username,
       role: user.role,
-      age: user.age,
-      enrollmentNo: user.enrollmentNo,
-      course: user.course,
-      year: user.year,
-      department: user.department,
-      designation: user.designation,
       isActive: user.isActive,
       createdAt: user.createdAt
     });
+
+    // Insert into student or faculty table
+    if (userRole === 'student') {
+      await db.insert(student).values({
+        userId: newUser.id,
+        age: age,
+        enrollmentNo: body.enrollmentNo.trim(),
+        course: body.course,
+        year: body.year,
+        department: body.department || null,
+        gender: body.gender || null
+      });
+    } else if (userRole === 'faculty') {
+      await db.insert(faculty).values({
+        userId: newUser.id,
+        age: age,
+        department: body.department,
+        facultyNumber: body.facultyNumber?.trim() || null,
+        gender: body.gender || null
+      });
+    }
 
     // Return success response with user data
     return json({
@@ -158,11 +170,7 @@ export const POST: RequestHandler = async ({ request }) => {
         email: newUser.email,
         phone: newUser.phone,
         username: newUser.username,
-        enrollmentNo: newUser.enrollmentNo,
-        course: newUser.course,
-        year: newUser.year,
-        department: newUser.department,
-        designation: newUser.designation,
+        role: newUser.role,
         isActive: newUser.isActive,
         createdAt: newUser.createdAt
       }
@@ -170,7 +178,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
   } catch (err: any) {
     console.error('Error creating account:', err);
-    
+
     // Handle database constraint violations
     if (err.code === '23505') { // PostgreSQL unique constraint violation
       let message = 'A user with this information already exists';
@@ -180,16 +188,18 @@ export const POST: RequestHandler = async ({ request }) => {
         message = 'Username is already taken';
       } else if (err.detail?.includes('enrollment_no')) {
         message = 'Enrollment number is already registered';
+      } else if (err.detail?.includes('faculty_number')) {
+        message = 'Faculty number is already registered';
       }
       return json({ success: false, message }, { status: 409 });
     }
-    
+
     // Handle other database errors
     if (err.code) {
       console.error('Database error:', err.code, err.detail);
       return json({ success: false, message: 'Database error occurred' }, { status: 500 });
     }
-    
+
     // Generic error
     return json({ success: false, message: 'Internal server error' }, { status: 500 });
   }

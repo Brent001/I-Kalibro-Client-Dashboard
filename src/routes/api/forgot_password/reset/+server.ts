@@ -26,15 +26,64 @@ export const POST: RequestHandler = async ({ request }) => {
     const normalizedEmail = email.toLowerCase().trim();
     const normalizedOTP = otp.trim();
 
-    // Validate user exists
+    // Verify OTP from Redis FIRST
+    const key = `otp:${normalizedEmail}`;
+    console.log(`[Reset Password] Checking OTP for key: ${key}`);
+    
+    const storedRaw = await redisClient.get(key);
+    console.log(`[Reset Password] OTP data from Redis:`, storedRaw);
+
+    if (!storedRaw) {
+      console.log(`[Reset Password] No OTP found in Redis`);
+      return json({ 
+        success: false, 
+        message: 'OTP not found or expired. Please request a new one.' 
+      }, { status: 404 });
+    }
+
+    let stored;
+    try {
+      stored = JSON.parse(storedRaw);
+    } catch (parseError) {
+      console.error(`[Reset Password] Failed to parse OTP data:`, parseError);
+      await redisClient.del(key);
+      return json({ 
+        success: false, 
+        message: 'Invalid OTP data. Please request a new one.' 
+      }, { status: 500 });
+    }
+
+    // Check if OTP expired
+    if (Date.now() > stored.expiresAt) {
+      console.log(`[Reset Password] OTP expired`);
+      await redisClient.del(key);
+      return json({ 
+        success: false, 
+        message: 'OTP has expired. Please request a new one.' 
+      }, { status: 400 });
+    }
+
+    // Verify OTP matches
+    if (stored.otp !== normalizedOTP) {
+      console.log(`[Reset Password] OTP mismatch - Expected: ${stored.otp}, Got: ${normalizedOTP}`);
+      return json({ 
+        success: false, 
+        message: 'Invalid OTP. Please verify your OTP again.' 
+      }, { status: 400 });
+    }
+
+    console.log(`[Reset Password] OTP verified successfully`);
+
+    // Validate user exists using the email from OTP data
     const [userRow] = await db
-      .select({ id: user.id })
+      .select({ id: user.id, email: user.email })
       .from(user)
       .where(eq(user.email, normalizedEmail))
       .limit(1);
 
     if (!userRow) {
       console.log(`[Reset Password] No user found for email: ${normalizedEmail}`);
+      await redisClient.del(key);
       return json({ 
         success: false, 
         message: 'No account found for this email' 
@@ -70,52 +119,6 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    // Verify OTP from Redis
-    const key = `otp:${normalizedEmail}`;
-    console.log(`[Reset Password] Checking OTP for key: ${key}`);
-    
-    const storedRaw = await redisClient.get(key);
-    console.log(`[Reset Password] OTP data from Redis:`, storedRaw);
-
-    if (!storedRaw) {
-      console.log(`[Reset Password] No OTP found in Redis`);
-      return json({ 
-        success: false, 
-        message: 'OTP not found or expired. Please request a new one.' 
-      }, { status: 404 });
-    }
-
-    let stored;
-    try {
-      stored = JSON.parse(storedRaw);
-    } catch (parseError) {
-      console.error(`[Reset Password] Failed to parse OTP data:`, parseError);
-      await redisClient.del(key);
-      return json({ 
-        success: false, 
-        message: 'Invalid OTP data. Please request a new one.' 
-      }, { status: 500 });
-    }
-
-    // Verify OTP matches
-    if (stored.otp !== normalizedOTP) {
-      console.log(`[Reset Password] OTP mismatch - Expected: ${stored.otp}, Got: ${normalizedOTP}`);
-      return json({ 
-        success: false, 
-        message: 'Invalid OTP. Please verify your OTP again.' 
-      }, { status: 400 });
-    }
-
-    // Check if OTP expired
-    if (Date.now() > stored.expiresAt) {
-      console.log(`[Reset Password] OTP expired`);
-      await redisClient.del(key);
-      return json({ 
-        success: false, 
-        message: 'OTP has expired. Please request a new one.' 
-      }, { status: 400 });
-    }
-
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     console.log(`[Reset Password] Password hashed successfully`);
@@ -123,7 +126,10 @@ export const POST: RequestHandler = async ({ request }) => {
     // Update password in database
     await db
       .update(user)
-      .set({ password: hashedPassword })
+      .set({ 
+        password: hashedPassword,
+        updatedAt: new Date()
+      })
       .where(eq(user.email, normalizedEmail));
 
     console.log(`[Reset Password] Password updated in database for ${normalizedEmail}`);
@@ -219,7 +225,7 @@ export const POST: RequestHandler = async ({ request }) => {
       console.log(`[Reset Password] Confirmation email sent to ${normalizedEmail}`);
     } catch (emailError) {
       console.error('[Reset Password] Failed to send confirmation email:', emailError);
-      // Don't fail the request if email fails
+      // Don't fail the request if email fails - password was already reset
     }
 
     return json({ 
