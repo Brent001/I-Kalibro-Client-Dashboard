@@ -126,7 +126,7 @@ export const load: PageServerLoad = async ({ cookies, url, request }) => {
         isSecureContext,
         config: capabilities.recommendedSettings,
         errors: {
-          httpsRequired: !isSecureContext ? 'Camera access requires HTTPS or localhost' : null,
+          httpsRequired: null, // Removed HTTPS restriction
           unsupportedBrowser: !capabilities.supportsCamera ? 'Browser does not support camera access' : null
         }
       }

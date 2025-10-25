@@ -65,6 +65,13 @@
     cameraPermission = 'checking';
     errorMsg = "";
 
+    // Add this check:
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      errorMsg = "Camera access is not supported in this browser or context.";
+      cameraPermission = 'denied';
+      return false;
+    }
+
     try {
       const constraints = {
         video: {
