@@ -15,7 +15,8 @@
     year: '',
     department: '',
     facultyNumber: '', // Add this for faculty if needed
-    gender: ''
+    gender: '',
+    otp: '' // <-- Added OTP field
   };
 
   let errors: Record<string, string> = {};
@@ -125,7 +126,7 @@
 
   function getStepFields(step: number): string[] {
     if (step === 1) return ['name', 'email', 'phone', 'age'];
-    if (step === 2) return ['username', 'password', 'confirmPassword'];
+    if (step === 2) return ['username', 'password', 'confirmPassword', 'otp'];
     if (step === 3) return ['enrollmentNo', 'course', 'year', 'department', 'terms']; // Remove 'designation'
     return [];
   }
@@ -290,6 +291,75 @@
   // Password visibility toggle
   let showPassword = false;
   let showConfirmPassword = false;
+
+  let otpSent = false;
+  let otpSuccessMsg = '';
+  let otpErrorMsg = '';
+  let otpResendTimer = 0;
+  let otpResendInterval: any = null;
+
+  function startOtpResendTimer() {
+    otpResendTimer = 60;
+    if (otpResendInterval) clearInterval(otpResendInterval);
+    otpResendInterval = setInterval(() => {
+      otpResendTimer--;
+      if (otpResendTimer <= 0) {
+        clearInterval(otpResendInterval);
+      }
+    }, 1000);
+  }
+
+  async function handleSendOtp() {
+    otpErrorMsg = '';
+    otpSuccessMsg = '';
+    if (!formData.email || errors.email) {
+      otpErrorMsg = 'Enter a valid email first.';
+      return;
+    }
+    try {
+      const res = await fetch('/api/register/send_otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email })
+      });
+      const data = await res.json();
+      if (data.success) {
+        otpSent = true;
+        otpSuccessMsg = `OTP sent to ${data.maskedEmail || formData.email}`;
+        startOtpResendTimer();
+      } else {
+        otpErrorMsg = data.message || 'Failed to send OTP';
+      }
+    } catch (err) {
+      otpErrorMsg = 'Network error. Please try again.';
+    }
+  }
+
+  async function handleVerifyOtp() {
+    otpErrorMsg = '';
+    otpSuccessMsg = '';
+    if (!formData.otp || formData.otp.length !== 6) {
+      otpErrorMsg = 'Please enter a valid 6-digit OTP.';
+      return;
+    }
+    try {
+      const res = await fetch('/api/register/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, otp: formData.otp })
+      });
+      const data = await res.json();
+      if (data.success) {
+        otpSuccessMsg = 'OTP verified successfully!';
+        otpErrorMsg = '';
+        otpSent = true;
+      } else {
+        otpErrorMsg = data.message || 'Invalid OTP. Please try again.';
+      }
+    } catch (err) {
+      otpErrorMsg = 'Network error. Please try again.';
+    }
+  }
 </script>
 
 <svelte:head>
@@ -741,6 +811,82 @@
                   {#if errors.confirmPassword}
                     <p class="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>
                   {/if}
+                </div>
+
+                <!-- OTP Field (for email verification) -->
+                <div>
+                  <label for="otp" class="block text-sm font-medium text-gray-700 mb-2">
+                    Email Verification Code (OTP)
+                    <span class="text-red-500">*</span>
+                  </label>
+                  <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-3 space-y-2 sm:space-y-0">
+                    <input
+                      id="otp"
+                      type="text"
+                      maxlength="6"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      bind:value={formData.otp}
+                      on:input={e => {
+                        // Only allow numbers in OTP
+                        formData.otp = e.target.value.replace(/\D/g, '').slice(0, 6);
+                        clearError('otp');
+                        otpErrorMsg = '';
+                        otpSuccessMsg = '';
+                      }}
+                      class="block w-full sm:w-48 pl-10 pr-3 py-2 border {errors.otp ? 'border-red-300' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-lg tracking-widest text-center font-mono"
+                      placeholder="6-digit code"
+                      autocomplete="one-time-code"
+                    />
+                    <button
+                      type="button"
+                      class="text-xs px-4 py-2 rounded font-semibold transition-colors border border-blue-200
+                        {otpResendTimer > 0
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}"
+                      on:click={handleSendOtp}
+                      disabled={!formData.email || !!errors.email || otpResendTimer > 0}
+                    >
+                      {otpResendTimer > 0
+                        ? `Resend OTP (${otpResendTimer}s)`
+                        : otpSent ? 'Resend OTP' : 'Send OTP'}
+                    </button>
+                    <button
+                      type="button"
+                      class="text-xs px-4 py-2 rounded font-semibold transition-colors border border-green-200
+                        {(!formData.otp || formData.otp.length !== 6)
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-green-50 text-green-700 hover:bg-green-100'}"
+                      on:click={handleVerifyOtp}
+                      disabled={!formData.otp || formData.otp.length !== 6}
+                    >
+                      Verify OTP
+                    </button>
+                  </div>
+                  {#if errors.otp}
+                    <p class="mt-1 text-sm text-red-600">{errors.otp}</p>
+                  {/if}
+                  {#if otpSuccessMsg}
+                    <div class="mt-2 flex items-center text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2 text-sm">
+                      <svg class="h-4 w-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4"/>
+                        <circle cx="12" cy="12" r="9"/>
+                      </svg>
+                      {otpSuccessMsg}
+                    </div>
+                  {/if}
+                  {#if otpErrorMsg}
+                    <div class="mt-2 flex items-center text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2 text-sm">
+                      <svg class="h-4 w-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01"/>
+                        <circle cx="12" cy="12" r="9"/>
+                      </svg>
+                      {otpErrorMsg}
+                    </div>
+                  {/if}
+                  <p class="mt-1 text-xs text-gray-500">
+                    Check your email for a 6-digit code. Didn't receive it? Click "Send OTP".
+                  </p>
                 </div>
               </div>
             </div>
