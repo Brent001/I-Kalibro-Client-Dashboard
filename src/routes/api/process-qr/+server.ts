@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types.js';
 import jwt from 'jsonwebtoken';
 import { db } from '$lib/server/db/index.js';
 import { user, qrCodeToken } from '$lib/server/db/schema/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
@@ -35,15 +35,25 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       return json({ error: 'Invalid QR content' }, { status: 400 });
     }
 
-    // Check if QR code exists in qrCodeToken table
+    // Require QR code to start with LIBVISIT-
+    if (!content.startsWith('LIBVISIT-')) {
+      return json({ error: 'Only library visit QR codes are allowed.' }, { status: 400 });
+    }
+
+    // Check if QR code exists in qrCodeToken table and is type 'library_visit'
     const [qrRow] = await db
       .select()
       .from(qrCodeToken)
-      .where(eq(qrCodeToken.token, content))
+      .where(
+        and(
+          eq(qrCodeToken.token, content),
+          eq(qrCodeToken.type, 'library_visit')
+        )
+      )
       .limit(1);
 
     if (!qrRow) {
-      return json({ error: 'QR code is not valid or not recognized.' }, { status: 400 });
+      return json({ error: 'QR code is not valid, not recognized, or not a library visit QR.' }, { status: 400 });
     }
 
     // Here you would process time in (e.g., insert into libraryVisit table)
