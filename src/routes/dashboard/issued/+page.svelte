@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { browser } from '$app/environment';
-  import Layout from "$lib/components/ui/layout.svelte";
   
   export let data;
   const currentUser = data.user;
@@ -68,9 +67,31 @@
     loading = true;
     try {
       const res = await apiCall('/api/issued');
-      borrowedBooks = res.borrowed || [];
-      reservedBooks = res.reserved || [];
-      overdueBooks = res.overdue || [];
+      // Normalize server shapes to the component's expected fields
+      const normalizeBorrow = (b: any) => ({
+        id: b.id,
+        bookId: b.bookId ?? b.itemId ?? b.book_id ?? b.item_id,
+        bookTitle: b.bookTitle ?? b.title ?? b.name ?? '',
+        bookAuthor: b.bookAuthor ?? b.author ?? b.publisher ?? '',
+        dueDate: b.dueDate ?? b.due_date ?? null,
+        borrowDate: b.borrowDate ?? b.borrow_date ?? null,
+        status: b.status ?? null,
+        itemType: b.itemType ?? null
+      });
+
+      const normalizeReserve = (r: any) => ({
+        id: r.id,
+        bookId: r.bookId ?? r.itemId ?? r.book_id ?? r.item_id,
+        bookTitle: r.bookTitle ?? r.title ?? r.name ?? '',
+        bookAuthor: r.bookAuthor ?? r.author ?? r.publisher ?? '',
+        reservedDate: r.reservedDate ?? r.requestedBorrowDate ?? r.requestDate ?? r.requested_borrow_date ?? null,
+        status: r.status ?? null,
+        itemType: r.itemType ?? null
+      });
+
+      borrowedBooks = (res.borrowed || []).map(normalizeBorrow);
+      reservedBooks = (res.reserved || []).map(normalizeReserve);
+      overdueBooks = (res.overdue || []).map(normalizeBorrow);
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to fetch issued books';
     } finally {
@@ -109,8 +130,7 @@
   });
 </script>
 
-<Layout>
-  <div class="min-h-screen bg-white">
+<div class="dashboard-scale min-h-screen bg-white">
     <div class="max-w-7xl mx-auto px-1 py-3 sm:px-3 sm:py-5">
       <!-- Header Section -->
       <div class="mb-3 sm:mb-5">
@@ -120,6 +140,18 @@
             <p class="text-slate-600 mt-1 sm:mt-2 text-sm sm:text-base">Manage your borrowed books, reservations, and penalties</p>
           </div>
         </div>
+
+        <style>
+          /* Slightly increase UI scale on dashboard pages */
+          .dashboard-scale {
+            font-size: 15px;
+          }
+          @media (min-width: 1024px) {
+            .dashboard-scale {
+              font-size: 16px;
+            }
+          }
+        </style>
       </div>
 
       <!-- Tabs -->
@@ -310,4 +342,3 @@
       {/if}
     </div>
   </div>
-</Layout>

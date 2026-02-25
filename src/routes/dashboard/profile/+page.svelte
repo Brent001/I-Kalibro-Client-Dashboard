@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Layout from "$lib/components/ui/layout.svelte";
   import { page } from "$app/stores";
 
   $: user = $page.data?.user;
@@ -25,8 +24,7 @@
   }
 </script>
 
-<Layout>
-  <div class="space-y-4">
+<div class="space-y-4">
     <!-- Welcome Header -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-3 flex items-center space-x-3">
       <div class="w-10 h-10 bg-slate-200 rounded-full flex items-center justify-center flex-shrink-0">
@@ -39,10 +37,10 @@
           {user?.name || 'User'}
         </div>
         <div class="text-xs text-gray-500 truncate">
-          {#if user?.role === 'student'}
+          {#if user?.userType === 'student'}
             {user?.course || 'Student'} {user?.year ? `• ${user.year}` : ''}
           {:else}
-            {user?.designation || 'Faculty'} {user?.department ? `• ${user.department}` : ''}
+            {user?.position || 'Faculty'} {user?.department ? `• ${user.department}` : ''}
           {/if}
           {#if user?.enrollmentNo}
             &nbsp;|&nbsp;ID: {user.enrollmentNo}
@@ -162,7 +160,7 @@
 
           <!-- Academic/Professional Info -->
           <div class="py-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {#if user?.role === 'student'}
+            {#if user?.userType === 'student'}
               <div>
                 <p class="text-xs text-gray-600 font-medium mb-1">Enrollment No</p>
                 <p class="text-sm text-gray-900">{user?.enrollmentNo || 'N/A'}</p>
@@ -187,14 +185,14 @@
                 <p class="text-xs text-gray-600 font-medium mb-1">Age</p>
                 <p class="text-sm text-gray-900">{user?.age || 'N/A'}</p>
               </div>
-            {:else if user?.role === 'faculty'}
+            {:else if user?.userType === 'faculty'}
               <div>
                 <p class="text-xs text-gray-600 font-medium mb-1">Faculty Number</p>
                 <p class="text-sm text-gray-900">{user?.facultyNumber || 'N/A'}</p>
               </div>
               <div>
-                <p class="text-xs text-gray-600 font-medium mb-1">Designation</p>
-                <p class="text-sm text-gray-900">{user?.designation || 'N/A'}</p>
+                <p class="text-xs text-gray-600 font-medium mb-1">Position</p>
+                <p class="text-sm text-gray-900">{user?.position || 'N/A'}</p>
               </div>
               <div>
                 <p class="text-xs text-gray-600 font-medium mb-1">Department</p>
@@ -249,4 +247,3 @@
       </a>
     </div>
   </div>
-</Layout>
