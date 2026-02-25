@@ -1,7 +1,7 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { db } from '$lib/server/db/index.js';
-import { user, student, faculty, bookBorrowing, bookReservation, book, userActivity } from '$lib/server/db/schema/schema.js';
-import { eq, and, gt, desc } from 'drizzle-orm';
+import { tbl_user, tbl_student, tbl_faculty, tbl_book_borrowing, tbl_book_reservation, tbl_book } from '$lib/server/db/schema/schema.js';
+import { eq, and, desc } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
@@ -25,16 +25,16 @@ async function getAuthenticatedUser(request: Request) {
         const decoded = jwt.verify(token, JWT_SECRET) as any;
         const userId = decoded.userId || decoded.id;
         if (!userId) return null;
-        const [userRow] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
+        const [userRow] = await db.select().from(tbl_user).where(eq(tbl_user.id, userId)).limit(1);
         if (!userRow || !userRow.isActive) return null;
 
         // Attach student/faculty info
         let extraInfo = null;
-        if (userRow.role === 'student') {
-            const [studentRow] = await db.select().from(student).where(eq(student.userId, userId)).limit(1);
+        if (userRow.userType === 'student') {
+            const [studentRow] = await db.select().from(tbl_student).where(eq(tbl_student.userId, userId)).limit(1);
             if (studentRow) extraInfo = studentRow;
-        } else if (userRow.role === 'faculty') {
-            const [facultyRow] = await db.select().from(faculty).where(eq(faculty.userId, userId)).limit(1);
+        } else if (userRow.userType === 'faculty') {
+            const [facultyRow] = await db.select().from(tbl_faculty).where(eq(tbl_faculty.userId, userId)).limit(1);
             if (facultyRow) extraInfo = facultyRow;
         }
         return { userRow, extraInfo };
@@ -51,58 +51,81 @@ export const GET: RequestHandler = async ({ request }) => {
 
     const { userRow, extraInfo } = currentUser;
 
-    // Borrowed books (not returned)
-    const borrowedBooks = await db
-        .select({
-            id: bookBorrowing.id,
-            title: book.title,
-            author: book.author,
-            dueDate: bookBorrowing.dueDate,
-            status: bookBorrowing.status,
-            fine: bookBorrowing.fine
-        })
-        .from(bookBorrowing)
-        .leftJoin(book, eq(bookBorrowing.bookId, book.id))
-        .where(and(eq(bookBorrowing.userId, userRow.id), eq(bookBorrowing.status, 'borrowed')));
+    // Borrowed books (not returned) - do separate queries to avoid circular references
+    const borrowedBorrowings = await db
+        .select()
+        .from(tbl_book_borrowing)
+        .where(and(eq(tbl_book_borrowing.userId, userRow.id), eq(tbl_book_borrowing.status, 'borrowed')));
 
-    // Reservations
-    const reservations = await db
-        .select({
-            id: bookReservation.id,
-            title: book.title,
-            author: book.author,
-            reservedDate: bookReservation.reservationDate,
-            status: bookReservation.status
+    const borrowedBooks = await Promise.all(
+        borrowedBorrowings.map(async (borrow) => {
+            const [book] = await db.select().from(tbl_book).where(eq(tbl_book.id, borrow.bookId)).limit(1);
+            return {
+                id: borrow.id,
+                title: book?.title || 'Unknown',
+                author: book?.author || 'Unknown',
+                dueDate: borrow.dueDate,
+                status: borrow.status
+            };
         })
-        .from(bookReservation)
-        .leftJoin(book, eq(bookReservation.bookId, book.id))
-        .where(and(eq(bookReservation.userId, userRow.id), eq(bookReservation.status, 'active')));
+    );
 
-    // Recent activity (last 10)
-    const activities = await db
-        .select({
-            id: userActivity.id,
-            type: userActivity.activityType,
-            details: userActivity.activityDetails,
-            timestamp: userActivity.timestamp
+    // Reservations - do separate queries
+    const bookReservations = await db
+        .select()
+        .from(tbl_book_reservation)
+        .where(and(eq(tbl_book_reservation.userId, userRow.id), eq(tbl_book_reservation.status, 'active')));
+
+    const reservations = await Promise.all(
+        bookReservations.map(async (res) => {
+            const [book] = await db.select().from(tbl_book).where(eq(tbl_book.id, res.bookId)).limit(1);
+            return {
+                id: res.id,
+                title: book?.title || 'Unknown',
+                author: book?.author || 'Unknown',
+                reservedDate: res.reservationDate,
+                status: res.status
+            };
         })
-        .from(userActivity)
-        .where(eq(userActivity.userId, userRow.id))
-        .orderBy(desc(userActivity.timestamp))
+    );
+
+    // Recent activity (last 10 - using borrowing transactions as activity log) - do separate queries
+    const recentBorrowings = await db
+        .select()
+        .from(tbl_book_borrowing)
+        .where(eq(tbl_book_borrowing.userId, userRow.id))
+        .orderBy(desc(tbl_book_borrowing.createdAt))
         .limit(10);
 
-    // Penalties/fines (unpaid)
-    const penalties = await db
-        .select({
-            id: bookBorrowing.id,
-            title: book.title,
-            fine: bookBorrowing.fine,
-            status: bookBorrowing.status,
-            dueDate: bookBorrowing.dueDate
+    const activities = await Promise.all(
+        recentBorrowings.map(async (borrow) => {
+            const [book] = await db.select().from(tbl_book).where(eq(tbl_book.id, borrow.bookId)).limit(1);
+            return {
+                id: borrow.id,
+                title: book?.title || 'Unknown',
+                type: 'borrow',
+                timestamp: borrow.createdAt
+            };
         })
-        .from(bookBorrowing)
-        .leftJoin(book, eq(bookBorrowing.bookId, book.id))
-        .where(and(eq(bookBorrowing.userId, userRow.id), gt(bookBorrowing.fine, 0), eq(bookBorrowing.status, 'overdue')));
+    );
+
+    // Penalties/fines (overdue items)
+    const overdueBorrowings = await db
+        .select()
+        .from(tbl_book_borrowing)
+        .where(and(eq(tbl_book_borrowing.userId, userRow.id), eq(tbl_book_borrowing.status, 'overdue')));
+
+    const penalties = await Promise.all(
+        overdueBorrowings.map(async (borrow) => {
+            const [book] = await db.select().from(tbl_book).where(eq(tbl_book.id, borrow.bookId)).limit(1);
+            return {
+                id: borrow.id,
+                title: book?.title || 'Unknown',
+                status: borrow.status,
+                dueDate: borrow.dueDate
+            };
+        })
+    );
 
     // Compose user info with extra fields from student/faculty
     let userInfo: any = {
@@ -110,11 +133,11 @@ export const GET: RequestHandler = async ({ request }) => {
         name: userRow.name,
         username: userRow.username,
         email: userRow.email,
-        role: userRow.role,
+        userType: userRow.userType,
         isActive: userRow.isActive
     };
 
-    if (userRow.role === 'student' && extraInfo) {
+    if (userRow.userType === 'student' && extraInfo) {
         userInfo = {
             ...userInfo,
             gender: extraInfo.gender,
@@ -124,7 +147,7 @@ export const GET: RequestHandler = async ({ request }) => {
             year: 'year' in extraInfo ? extraInfo.year : null,
             department: extraInfo.department
         };
-    } else if (userRow.role === 'faculty' && extraInfo) {
+    } else if (userRow.userType === 'faculty' && extraInfo) {
         userInfo = {
             ...userInfo,
             gender: extraInfo.gender,

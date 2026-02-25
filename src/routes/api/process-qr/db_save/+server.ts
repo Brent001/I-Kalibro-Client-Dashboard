@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import jwt from 'jsonwebtoken';
 import { db } from '$lib/server/db/index.js';
-import { user, libraryVisit } from '$lib/server/db/schema/schema.js';
+import { tbl_user, tbl_library_visit } from '$lib/server/db/schema/schema.js';
 import { eq, and, isNull, desc } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
@@ -20,9 +20,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
     // Verify user exists and is active
     const [userRow] = await db
-      .select({ id: user.id, isActive: user.isActive, username: user.username, name: user.name, role: user.role })
-      .from(user)
-      .where(eq(user.id, userId))
+      .select({ id: tbl_user.id, isActive: tbl_user.isActive, username: tbl_user.username, name: tbl_user.name, userType: tbl_user.userType })
+      .from(tbl_user)
+      .where(eq(tbl_user.id, userId))
       .limit(1);
 
     if (!userRow || !userRow.isActive) {
@@ -47,14 +47,14 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
       const recentEntry = await db
         .select()
-        .from(libraryVisit)
+        .from(tbl_library_visit)
         .where(
           and(
-            eq(libraryVisit.userId, userId),
-            isNull(libraryVisit.timeOut) // Only check entries without time out
+            eq(tbl_library_visit.userId, userId),
+            isNull(tbl_library_visit.timeOut) // Only check entries without time out
           )
         )
-        .orderBy(desc(libraryVisit.timeIn))
+        .orderBy(desc(tbl_library_visit.timeIn))
         .limit(1);
 
       if (recentEntry.length > 0) {
@@ -68,18 +68,17 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       }
 
       // Insert new library visit with purpose
-      const [newVisit] = await db.insert(libraryVisit).values({
+      const [newVisit] = await db.insert(tbl_library_visit).values({
         userId,
-        username,
-        fullName,
+        visitorName: fullName,
         visitorType,
-        purpose, // Store the purpose
+        purpose,
         timeIn: new Date(),
         timeOut: null,
         createdAt: new Date()
       }).returning({
-        id: libraryVisit.id,
-        timeIn: libraryVisit.timeIn
+        id: tbl_library_visit.id,
+        timeIn: tbl_library_visit.timeIn
       });
 
       return json({
@@ -96,14 +95,14 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       // Find the most recent active visit (without time out)
       const [activeVisit] = await db
         .select()
-        .from(libraryVisit)
+        .from(tbl_library_visit)
         .where(
           and(
-            eq(libraryVisit.userId, userId),
-            isNull(libraryVisit.timeOut)
+            eq(tbl_library_visit.userId, userId),
+            isNull(tbl_library_visit.timeOut)
           )
         )
-        .orderBy(desc(libraryVisit.timeIn))
+        .orderBy(desc(tbl_library_visit.timeIn))
         .limit(1);
 
       if (!activeVisit) {
@@ -115,9 +114,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       // Update the visit with time out
       const timeOutTimestamp = new Date();
       await db
-        .update(libraryVisit)
+        .update(tbl_library_visit)
         .set({ timeOut: timeOutTimestamp })
-        .where(eq(libraryVisit.id, activeVisit.id));
+        .where(eq(tbl_library_visit.id, activeVisit.id));
 
       return json({
         success: true,

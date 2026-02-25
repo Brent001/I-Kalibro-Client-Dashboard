@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types.js';
 import { json } from '@sveltejs/kit';
 import { db } from '$lib/server/db/index.js';
-import { user, student, faculty } from '$lib/server/db/schema/schema.js';
+import { tbl_user, tbl_student, tbl_faculty } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
 
@@ -24,8 +24,8 @@ export const GET: RequestHandler = async ({ cookies }) => {
     // Fetch user data
     const [userData] = await db
       .select()
-      .from(user)
-      .where(eq(user.id, userId))
+      .from(tbl_user)
+      .where(eq(tbl_user.id, userId))
       .limit(1);
 
     if (!userData) {
@@ -34,10 +34,10 @@ export const GET: RequestHandler = async ({ cookies }) => {
 
     // Fetch student/faculty info
     let extraInfo = null;
-    if (userData.role === 'student') {
-      [extraInfo] = await db.select().from(student).where(eq(student.userId, userId)).limit(1);
-    } else if (userData.role === 'faculty') {
-      [extraInfo] = await db.select().from(faculty).where(eq(faculty.userId, userId)).limit(1);
+    if (userData.userType === 'student') {
+      [extraInfo] = await db.select().from(tbl_student).where(eq(tbl_student.userId, userId)).limit(1);
+    } else if (userData.userType === 'faculty') {
+      [extraInfo] = await db.select().from(tbl_faculty).where(eq(tbl_faculty.userId, userId)).limit(1);
     }
 
     // Remove password from response
@@ -83,8 +83,8 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
     if (email) {
       const existingUser = await db
         .select()
-        .from(user)
-        .where(eq(user.email, email))
+        .from(tbl_user)
+        .where(eq(tbl_user.email, email))
         .limit(1);
 
       if (existingUser.length > 0 && existingUser[0].id !== userId) {
@@ -110,38 +110,38 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
     }
 
     await db
-      .update(user)
+      .update(tbl_user)
       .set(updateData)
-      .where(eq(user.id, userId));
+      .where(eq(tbl_user.id, userId));
 
     // Update student/faculty info
-    const [userRow] = await db.select().from(user).where(eq(user.id, userId)).limit(1);
+    const [userRow] = await db.select().from(tbl_user).where(eq(tbl_user.id, userId)).limit(1);
     let extraInfo = null;
-    if (userRow.role === 'student') {
-      await db.update(student).set({
+    if (userRow.userType === 'student') {
+      await db.update(tbl_student).set({
         gender: gender || null,
         age: age !== undefined ? age : null,
         department: department || null,
         course: course || null,
         year: year || null,
         enrollmentNo: enrollmentNo || null
-      }).where(eq(student.userId, userId));
-      [extraInfo] = await db.select().from(student).where(eq(student.userId, userId)).limit(1);
-    } else if (userRow.role === 'faculty') {
-      await db.update(faculty).set({
+      }).where(eq(tbl_student.userId, userId));
+      [extraInfo] = await db.select().from(tbl_student).where(eq(tbl_student.userId, userId)).limit(1);
+    } else if (userRow.userType === 'faculty') {
+      await db.update(tbl_faculty).set({
         gender: gender || null,
         age: age !== undefined ? age : null,
         department: department || null,
         facultyNumber: facultyNumber || null
-      }).where(eq(faculty.userId, userId));
-      [extraInfo] = await db.select().from(faculty).where(eq(faculty.userId, userId)).limit(1);
+      }).where(eq(tbl_faculty.userId, userId));
+      [extraInfo] = await db.select().from(tbl_faculty).where(eq(tbl_faculty.userId, userId)).limit(1);
     }
 
     // Fetch updated user data
     const [updatedUser] = await db
       .select()
-      .from(user)
-      .where(eq(user.id, userId))
+      .from(tbl_user)
+      .where(eq(tbl_user.id, userId))
       .limit(1);
 
     // Remove password from response

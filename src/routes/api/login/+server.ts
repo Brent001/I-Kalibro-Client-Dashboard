@@ -1,6 +1,6 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { db } from '$lib/server/db/index.js';
-import { user } from '$lib/server/db/schema/schema.js'; // <-- changed from account to user
+import { tbl_user } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 import jwt, { type Secret } from 'jsonwebtoken';
@@ -97,8 +97,8 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
         // Find user in database by username or email
         const [userRow] = await db
             .select()
-            .from(user)
-            .where(eq(user.username, username))
+            .from(tbl_user)
+            .where(eq(tbl_user.username, username))
             .limit(1);
 
         // If not found by username, try email
@@ -106,8 +106,8 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
         if (!userRow) {
             [userByEmail] = await db
                 .select()
-                .from(user)
-                .where(eq(user.email, username))
+                .from(tbl_user)
+                .where(eq(tbl_user.email, username))
                 .limit(1);
         }
 
@@ -139,9 +139,10 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 
         // Create JWT token
         const tokenPayload = {
+            userId: foundUser.id,
             id: foundUser.id,
             username: foundUser.username,
-            role: foundUser.role
+            userType: foundUser.userType
         };
         const token = jwt.sign(tokenPayload, JWT_SECRET, {
             expiresIn: JWT_EXPIRES_IN,
@@ -159,7 +160,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
         });
 
         // Log successful login (don't log password or sensitive data)
-        console.log(`Successful login: ${foundUser.username} (${foundUser.role}) from ${clientIP}`);
+        console.log(`Successful login: ${foundUser.username} (${foundUser.userType}) from ${clientIP}`);
 
         // Return success response with user data (excluding password)
         return new Response(
@@ -205,15 +206,15 @@ export const GET: RequestHandler = async ({ request }) => {
         // Optionally verify user still exists and is active
         const [userRow] = await db
             .select({
-                id: user.id,
-                name: user.name,
-                username: user.username,
-                email: user.email,
-                role: user.role,
-                isActive: user.isActive
+                id: tbl_user.id,
+                name: tbl_user.name,
+                username: tbl_user.username,
+                email: tbl_user.email,
+                userType: tbl_user.userType,
+                isActive: tbl_user.isActive
             })
-            .from(user)
-            .where(eq(user.id, decoded.id))
+            .from(tbl_user)
+            .where(eq(tbl_user.id, decoded.userId || decoded.id))
             .limit(1);
 
         if (!userRow || !userRow.isActive) {

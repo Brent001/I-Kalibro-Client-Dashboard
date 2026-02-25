@@ -1,34 +1,50 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { bookReservation } from '$lib/server/db/schema/schema.js';
-import { eq, and } from 'drizzle-orm';
+import {
+  tbl_book_reservation,
+  tbl_magazine_reservation,
+  tbl_thesis_reservation,
+  tbl_journal_reservation
+} from '$lib/server/db/schema/schema.js';
+import { eq, and, or } from 'drizzle-orm';
 
 // Cancel a reservation
 export const POST: RequestHandler = async ({ request }) => {
   try {
-    const { bookId, userId } = await request.json();
+    const { itemId, userId, itemType = 'book' } = await request.json();
 
-    if (!bookId || !userId) {
-      return error(400, { message: 'Book ID and User ID are required' });
+    if (!itemId || !userId) {
+      return error(400, { message: 'Item ID and User ID are required' });
     }
 
-    const bookIdNum = parseInt(bookId);
+    const itemIdNum = parseInt(itemId);
     const userIdNum = parseInt(userId);
 
-    if (isNaN(bookIdNum) || isNaN(userIdNum)) {
-      return error(400, { message: 'Book ID and User ID must be valid numbers' });
+    if (isNaN(itemIdNum) || isNaN(userIdNum)) {
+      return error(400, { message: 'Item ID and User ID must be valid numbers' });
     }
 
-    // Find active reservation
+    const type = (itemType || 'book').toLowerCase();
+    const mapping: Record<string, any> = {
+      book: { table: tbl_book_reservation, fk: 'bookId' },
+      magazine: { table: tbl_magazine_reservation, fk: 'magazineId' },
+      thesis: { table: tbl_thesis_reservation, fk: 'thesisId' },
+      journal: { table: tbl_journal_reservation, fk: 'journalId' }
+    };
+
+    const cfg = mapping[type];
+    if (!cfg) return error(400, { message: 'Unsupported itemType' });
+
+    // Find active reservation or borrow_request
     const [reservation] = await db
       .select()
-      .from(bookReservation)
+      .from(cfg.table)
       .where(
         and(
-          eq(bookReservation.userId, userIdNum),
-          eq(bookReservation.bookId, bookIdNum),
-          eq(bookReservation.status, 'active')
+          eq(cfg.table.userId, userIdNum),
+          eq(cfg.table[cfg.fk], itemIdNum),
+          or(eq(cfg.table.status, 'active'), eq(cfg.table.status, 'borrow_request'))
         )
       )
       .limit(1);
@@ -39,13 +55,13 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Mark reservation as cancelled
     await db
-      .update(bookReservation)
+      .update(cfg.table)
       .set({ status: 'cancelled' })
       .where(
         and(
-          eq(bookReservation.userId, userIdNum),
-          eq(bookReservation.bookId, bookIdNum),
-          eq(bookReservation.status, 'active')
+          eq(cfg.table.userId, userIdNum),
+          eq(cfg.table[cfg.fk], itemIdNum),
+          or(eq(cfg.table.status, 'active'), eq(cfg.table.status, 'borrow_request'))
         )
       );
 
@@ -53,7 +69,8 @@ export const POST: RequestHandler = async ({ request }) => {
       success: true,
       message: 'Reservation cancelled successfully',
       data: {
-        bookId: bookIdNum,
+        itemType: type,
+        itemId: itemIdNum,
         userId: userIdNum
       }
     });

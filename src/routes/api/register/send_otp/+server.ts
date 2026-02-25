@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types.js';
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db/index.js';
-import { user } from '$lib/server/db/schema/schema.js';
+import { tbl_user } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 import { redisClient } from '$lib/server/db/cache.js';
 
@@ -56,9 +56,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Check if email already exists
     const [existingUser] = await db
-      .select({ id: user.id })
-      .from(user)
-      .where(eq(user.email, normalizedEmail))
+      .select({ id: tbl_user.id })
+      .from(tbl_user)
+      .where(eq(tbl_user.email, normalizedEmail))
       .limit(1);
 
     if (existingUser) {
