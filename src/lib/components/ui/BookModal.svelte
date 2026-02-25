@@ -7,6 +7,7 @@
   export let actionLoading: boolean = false;
   export let onClose: () => void;
   export let onReserve: (book: any) => void;
+  export let onCancelReserve: ((book: any) => void) | undefined;
 
   function getStatusColor(status: string) {
     const colors: Record<string, string> = {
@@ -59,7 +60,7 @@
       on:click|stopPropagation
     >
       <!-- Modal Header -->
-      <div class="sticky top-0 bg-white border-b border-slate-200 px-4 sm:px-5 py-3 sm:py-3.5 flex items-start justify-between z-10">
+      <div class="sticky top-0 bg-white border-b border-slate-200 px-3 sm:px-5 py-2 sm:py-3.5 flex items-start justify-between z-10">
         <div class="flex-1 pr-3">
           <h3 class="text-lg sm:text-xl font-bold text-slate-900 leading-tight">{book.title}</h3>
           <p class="text-xs sm:text-sm text-slate-600 mt-0.5">by {book.author}</p>
@@ -67,7 +68,7 @@
       </div>
 
       <!-- Modal Body -->
-      <div class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
+      <div class="p-2 sm:p-5 space-y-4 overflow-y-auto flex-1">
         <!-- Status Badge -->
         <span class={`inline-flex items-center px-3 py-1.5 rounded-full text-xs sm:text-sm font-semibold border ${getStatusColor(book.status || 'Unknown')}`}>
           <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full mr-1.5 sm:mr-2 {book.status === 'Available' ? 'bg-emerald-500' : book.status === 'Limited' ? 'bg-amber-500' : 'bg-slate-500'}"></span>
@@ -75,7 +76,7 @@
         </span>
 
         <!-- Book Details Grid -->
-        <div class="grid grid-cols-2 gap-3 sm:gap-4 bg-slate-50 rounded-lg sm:rounded-xl p-3 sm:p-4">
+        <div class="grid grid-cols-2 gap-3 sm:gap-4 bg-slate-50 rounded-lg sm:rounded-xl p-2 sm:p-4">
           <div class="flex flex-col">
             <span class="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Book ID</span>
             <span class="text-sm sm:text-base text-slate-900 font-medium">{book.bookId}</span>
@@ -120,7 +121,7 @@
 
         <!-- Location -->
         {#if book.location}
-          <div class="flex items-start gap-2.5 sm:gap-3 bg-blue-50 border border-blue-200 rounded-lg sm:rounded-xl p-3 sm:p-4">
+          <div class="flex items-start gap-2.5 sm:gap-3 bg-blue-50 border border-blue-200 rounded-lg sm:rounded-xl p-2 sm:p-4">
             <svg class="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -134,11 +135,20 @@
       </div>
 
       <!-- Modal Footer -->
-      <div class="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-4 sm:px-5 py-3 sm:py-4 flex flex-col sm:flex-row gap-2 sm:gap-3 pb-10 sm:pb-3">
+      <div class="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-3 sm:px-5 py-2 sm:py-4 flex flex-col sm:flex-row gap-2 sm:gap-3 pb-10 sm:pb-3">
+        {#if book && reservedBookIds.includes(book.id) && onCancelReserve}
+          <button
+            on:click={() => onCancelReserve && onCancelReserve(book)}
+            class="px-3 sm:px-5 py-2.5 sm:py-3 border-2 border-red-200 text-red-600 font-semibold rounded-lg sm:rounded-xl hover:bg-red-50 transition-all text-xs sm:text-sm touch-manipulation"
+          >
+            Cancel Reservation
+          </button>
+        {/if}
+
         <button
           on:click={() => onReserve(book)}
           disabled={actionLoading || !book || reservedBookIds.includes(book?.id || 0) || borrowedBookIds.includes(book?.id || 0)}
-          class={`flex-1 py-2.5 sm:py-3 px-4 sm:px-5 font-semibold rounded-lg sm:rounded-xl transition-all text-xs sm:text-sm touch-manipulation
+          class={`flex-1 py-2.5 sm:py-3 px-3 sm:px-5 font-semibold rounded-lg sm:rounded-xl transition-all text-xs sm:text-sm touch-manipulation
             ${book && borrowedBookIds.includes(book.id)
               ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
               : book && reservedBookIds.includes(book.id)
@@ -156,7 +166,7 @@
         </button>
         <button
           on:click={handleClose}
-          class="px-4 sm:px-5 py-2.5 sm:py-3 border-2 border-slate-300 text-slate-700 font-semibold rounded-lg sm:rounded-xl hover:bg-white hover:border-slate-400 transition-all text-xs sm:text-sm touch-manipulation active:scale-95"
+          class="px-3 sm:px-5 py-2.5 sm:py-3 border-2 border-slate-300 text-slate-700 font-semibold rounded-lg sm:rounded-xl hover:bg-white hover:border-slate-400 transition-all text-xs sm:text-sm touch-manipulation active:scale-95"
         >
           Close
         </button>
