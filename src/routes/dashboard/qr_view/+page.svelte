@@ -112,7 +112,8 @@
     </div>
 
     <!-- Barcode -->
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col items-center">
+    <!-- on small screens this should appear before details -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col items-center order-first lg:order-last">
       <p class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-5 self-start">Barcode</p>
 
       <div class="w-full bg-white border border-slate-200 rounded-xl flex items-center justify-center py-4 px-2 min-h-[100px]">

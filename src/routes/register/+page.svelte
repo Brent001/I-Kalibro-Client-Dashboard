@@ -373,7 +373,7 @@
           </div>
           <div>
             <h3 class="font-semibold mb-1">Secure & Private</h3>
-            <p class="text-slate-200 text-sm">Your data is protected under RA 10173</p>
+            <p class="text-slate-200 text-sm">Your information is kept secure and private.</p>
           </div>
         </div>
         <div class="flex items-start space-x-3">
@@ -941,7 +941,7 @@
                     </svg>
                     <div class="text-sm text-[#0D5C29]">
                       <p class="font-semibold mb-1">Privacy & Data Collection Notice</p>
-                      <p class="text-xs text-[#0D5C29]/80 leading-relaxed">We collect and process your personal information in accordance with the <strong>Data Privacy Act of 2012 (RA 10173)</strong>. Your data will be used solely for library account management and will not be shared with third parties without consent.</p>
+                      <p class="text-xs text-[#0D5C29]/80 leading-relaxed">We collect and process your personal information responsibly. Your data will be used solely for library account management and will not be shared with third parties without your consent.</p>
                     </div>
                   </div>
                 </div>
@@ -969,7 +969,7 @@
                       <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                     <p class="text-xs text-[#6b5300] leading-relaxed">
-                      <strong>Your Rights (RA 10173):</strong> You have the right to access, correct, or request deletion of your data. Contact our DPO at <strong>dpo@school.edu</strong> or visit the library office.
+                      <strong>Your Rights:</strong> You have the right to access, correct, or request deletion of your data. Contact the library office for assistance.
                     </p>
                   </div>
                 </div>
@@ -1059,7 +1059,7 @@
           <a href="/" class="ml-1 font-semibold text-[#0D5C29] hover:text-[#0a4620] transition-colors">Sign in here</a>
         </p>
         <div class="mt-4 text-xs text-slate-400 space-y-1">
-          <p>Protected by the Data Privacy Act of 2012 (RA 10173)</p>
+          <p>Protected by our privacy practices.</p>
           <p>© 2026 Metro Dagupan Colleges Library. All rights reserved.</p>
         </div>
       </div>

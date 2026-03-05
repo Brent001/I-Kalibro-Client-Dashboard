@@ -16,18 +16,16 @@ export const load: PageServerLoad = async ({ cookies, fetch }) => {
             throw redirect(302, '/');
         }
 
-        // /api/profile returns both the flat merged user AND stats
-        const res = await fetch('/api/profile', {
+        const res = await fetch('/api/profile/activity_logs', {
             headers: { authorization: `Bearer ${token}` }
         });
 
-        if (!res.ok) throw redirect(302, '/');
+        if (!res.ok) throw redirect(302, '/dashboard/profile');
         const data = await res.json();
-        if (!data.success) throw redirect(302, '/');
+        if (!data.success) throw redirect(302, '/dashboard/profile');
 
         return {
-            user:  data.user,   // already flat-merged (tbl_user + tbl_student/tbl_faculty)
-            stats: data.stats   // { totalBorrowedEver, currentlyBorrowed, libraryVisits }
+            logs: data.logs || []
         };
     } catch (error) {
         if (
