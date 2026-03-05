@@ -1,24 +1,24 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
 
-  export let book: any;
-  export let reservedBookIds: number[] = [];
-  export let borrowedBookIds: number[] = [];
+  export let journal: any;
+  export let reservedJournalIds: number[] = [];
+  export let borrowedJournalIds: number[] = [];
   export let actionLoading: boolean = false;
   export let onClose: () => void;
-  export let onReserve: (book: any) => void;
-  export let onCancelReserve: ((book: any) => void) | undefined;
-  export let itemType: string = 'book';
+  export let onReserve: (journal: any) => void;
+  export let onCancelReserve: ((journal: any) => void) | undefined;
+  export let itemType: string = 'journal';
 
   function capitalize(str: string) {
     if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
   }
 
-  $: isReserved  = book && reservedBookIds.includes(book.id);
-  $: isBorrowed  = book && borrowedBookIds.includes(book.id);
-  // `book` object uses `availableCopies` field, not `copiesAvailable`.
-  $: isAvailable = book?.availableCopies > 0;
+  $: isReserved  = journal && reservedJournalIds.includes(journal.id);
+  $: isBorrowed  = journal && borrowedJournalIds.includes(journal.id);
+  // `journal` object uses `availableCopies` field, not `copiesAvailable`.
+  $: isAvailable = journal?.availableCopies > 0;
 
   let isDesktop = typeof window !== 'undefined'
     ? window.matchMedia('(min-width: 640px)').matches
@@ -50,14 +50,14 @@
   });
 </script>
 
-{#if book}
+{#if journal}
   <!-- Backdrop -->
   <div
     class="modal-backdrop"
     on:click={handleClose}
     role="dialog"
     aria-modal="true"
-    aria-label="Book details"
+    aria-label="Journal details"
   >
     <!-- Sheet -->
     <div
@@ -70,11 +70,11 @@
 
       <!-- ── Cover + Title hero ── -->
       <div class="hero">
-        {#if book.coverImage}
+        {#if journal.coverImage}
           <div class="cover-wrap">
             <img
-              src={book.coverImage}
-              alt="Cover of {book.title}"
+              src={journal.coverImage}
+              alt="Cover of {journal.title}"
               class="cover-img"
               loading="lazy"
               on:error={(e) => { (e.currentTarget as HTMLImageElement).parentElement?.classList.add('cover-error'); }}
@@ -98,15 +98,15 @@
           <span class="status-pill {isAvailable ? 'pill-available' : 'pill-unavailable'}">
             <span class="pill-dot"></span>
             {isAvailable
-              ? (book.availableCopies > 5 ? 'Available' : `${book.availableCopies} left`)
+              ? (journal.availableCopies > 5 ? 'Available' : `${journal.availableCopies} left`)
               : 'Unavailable'}
           </span>
 
-          <h2 class="book-title">{book.title}</h2>
-          <p class="book-author">by <em>{book.author}</em></p>
+          <h2 class="book-title">{journal.title}</h2>
+          <p class="book-author">by <em>{journal.author}</em></p>
 
-          {#if book.category}
-            <span class="category-tag">{book.category}</span>
+          {#if journal.category}
+            <span class="category-tag">{journal.category}</span>
           {/if}
         </div>
       </div>
@@ -121,40 +121,46 @@
         <dl class="meta-grid">
           <div class="meta-item">
             <dt>ID</dt>
-            <dd class="mono">{book.bookId}</dd>
+            <dd class="mono">{journal.journalId}</dd>
           </div>
           <div class="meta-item">
             <dt>Published</dt>
-            <dd>{book.publishedYear ?? '—'}</dd>
+            <dd>{journal.publishedDate ?? '—'}</dd>
           </div>
-          {#if book.language}
+          {#if journal.language}
             <div class="meta-item">
               <dt>Language</dt>
-              <dd>{book.language}</dd>
+              <dd>{journal.language}</dd>
             </div>
           {/if}
-          {#if book.publisher}
+          {#if journal.publisher}
             <div class="meta-item">
               <dt>Publisher</dt>
-              <dd>{book.publisher}</dd>
+              <dd>{journal.publisher}</dd>
             </div>
           {/if}
-          {#if book.edition}
+          {#if journal.issn}
             <div class="meta-item">
-              <dt>Edition</dt>
-              <dd>{book.edition}</dd>
+              <dt>ISSN</dt>
+              <dd class="mono">{journal.issn}</dd>
             </div>
           {/if}
-          {#if book.isbn}
+          {#if journal.volume}
             <div class="meta-item">
-              <dt>ISBN</dt>
-              <dd class="mono">{book.isbn}</dd>
+              <dt>Volume</dt>
+              <dd>{journal.volume}</dd>
             </div>
           {/if}
-          {#if book.pages}
+          {#if journal.issueNumber}
+            <div class="meta-item">
+              <dt>Issue</dt>
+              <dd>{journal.issueNumber}</dd>
+            </div>
+          {/if}
+          {#if journal.pages}
             <div class="meta-item">
               <dt>Pages</dt>
-              <dd>{book.pages}</dd>
+              <dd>{journal.pages}</dd>
             </div>
           {/if}
         </dl>
@@ -162,8 +168,8 @@
         <!-- Description -->
         <div class="description-block">
           <h3 class="section-label">About this {capitalize(itemType)}</h3>
-          {#if book.description}
-            <p class="description-text">{book.description}</p>
+          {#if journal.description}
+            <p class="description-text">{journal.description}</p>
           {:else}
             <p class="description-text text-muted">No description available.</p>
           {/if}
@@ -183,7 +189,7 @@
             {#if onCancelReserve}
               <button
                 class="btn-cancel"
-                on:click={() => onCancelReserve && onCancelReserve(book)}
+                on:click={() => onCancelReserve && onCancelReserve(journal)}
               >Cancel</button>
             {/if}
             <button class="btn-cta btn-reserved" disabled>
@@ -194,7 +200,7 @@
         {:else}
           <button
             class="btn-cta btn-reserve {!isAvailable ? 'btn-dim' : ''}"
-            on:click={() => onReserve(book)}
+            on:click={() => onReserve && onReserve(journal)}
             disabled={actionLoading || !isAvailable}
           >
             {#if actionLoading}
