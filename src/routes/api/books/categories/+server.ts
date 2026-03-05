@@ -99,14 +99,23 @@ export const GET: RequestHandler = async ({ request }) => {
     // }
 
     // Fetch categories from the database
-    const categoriesResult = await db
+    const itemTypeParam = request.url ? new URL(request.url).searchParams.get('itemType') : null;
+    const query = db
       .select({
         id: tbl_category.id,
         name: tbl_category.name,
-        description: tbl_category.description
+        description: tbl_category.description,
+        itemType: tbl_category.itemType
       })
-      .from(tbl_category)
-      .orderBy(tbl_category.name);
+      .from(tbl_category);
+
+    if (itemTypeParam) {
+      query.where(eq(tbl_category.itemType, itemTypeParam));
+    }
+
+    query.orderBy(tbl_category.name);
+
+    const categoriesResult = await query;
 
     return json({
       success: true,

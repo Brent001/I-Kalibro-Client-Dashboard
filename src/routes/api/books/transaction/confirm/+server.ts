@@ -27,13 +27,14 @@ import { env } from '$env/dynamic/private';
 const JWT_SECRET = env.JWT_SECRET || process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
 function todayISO() {
-  return new Date().toISOString().split('T')[0];
+  // return a Date object; callers can convert to ISO if needed
+  return new Date();
 }
 
 function dueISO(days = 14) {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  return d;
 }
 
 async function authenticateStaff(request: Request) {
@@ -148,8 +149,8 @@ export const POST: RequestHandler = async ({ request }) => {
       // Create borrowing record
       const insertBorrow: any = {
         userId: reservation.userId,
-        borrowDate: todayISO(),
-        dueDate: dueISO(14),
+        borrowDate: todayISO(), // already a Date
+        dueDate: dueISO(14),    // already a Date
         status: 'borrowed',
         approvedBy: staff.id
       };

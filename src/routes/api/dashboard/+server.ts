@@ -3,6 +3,7 @@ import { db } from '$lib/server/db/index.js';
 import { tbl_user, tbl_student, tbl_faculty, tbl_book_borrowing, tbl_book_reservation, tbl_book } from '$lib/server/db/schema/schema.js';
 import { eq, and, desc } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
+import { calculateFineAmount, calculateDaysOverdue } from '$lib/server/utils/fineCalculation.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
@@ -118,11 +119,15 @@ export const GET: RequestHandler = async ({ request }) => {
     const penalties = await Promise.all(
         overdueBorrowings.map(async (borrow) => {
             const [book] = await db.select().from(tbl_book).where(eq(tbl_book.id, borrow.bookId)).limit(1);
+            const days = await calculateDaysOverdue(new Date(borrow.dueDate));
+            const fine = Number((await calculateFineAmount(new Date(borrow.dueDate))).toFixed(2));
             return {
                 id: borrow.id,
                 title: book?.title || 'Unknown',
                 status: borrow.status,
-                dueDate: borrow.dueDate
+                dueDate: borrow.dueDate,
+                daysOverdue: days,
+                fine
             };
         })
     );

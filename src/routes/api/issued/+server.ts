@@ -224,7 +224,7 @@ export const GET: RequestHandler = async ({ request }) => {
     .where(and(eq(tbl_journal_reservation.userId, currentUser.id), or(eq(tbl_journal_reservation.status, 'active'), eq(tbl_journal_reservation.status, 'borrow_request'))));
 
   // Overdue items (books, magazines, theses, journals)
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date();
   const overdueBooks = await db
     .select({
       id: tbl_book_borrowing.id,

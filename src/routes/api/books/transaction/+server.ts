@@ -216,16 +216,28 @@ export const POST: RequestHandler = async ({ request }) => {
     const reservationStatus = requestType === 'borrow_request' ? 'borrow_request' : 'active';
 
     // Create reservation record (used for both regular reservations and borrow requests)
+    // build insert object with actual Date instances (Drizzle will call toISOString())
     const insertObj: any = {
       userId: userIdNum,
-      requestDate: getTodaysDate(),
+      requestDate: new Date(getTodaysDate()),
       // requestedBorrowDate and requestedDueDate are required by schema
-      requestedBorrowDate: requestBody.requestedBorrowDate || getTodaysDate(),
-      requestedDueDate: requestBody.requestedDueDate || calculateDueDate(),
-      expiryDate: calculateDueDate(),
+      requestedBorrowDate: requestBody.requestedBorrowDate
+        ? new Date(requestBody.requestedBorrowDate)
+        : new Date(getTodaysDate()),
+      requestedDueDate: requestBody.requestedDueDate
+        ? new Date(requestBody.requestedDueDate)
+        : new Date(calculateDueDate()),
+      expiryDate: new Date(calculateDueDate()),
       status: reservationStatus
     };
     insertObj[cfg.foreignKey] = itemIdNum;
+
+    // if any date fields came from client but were invalid, ensure they're actual Date
+    ['requestDate','requestedBorrowDate','requestedDueDate','expiryDate'].forEach(key => {
+      if (!(insertObj[key] instanceof Date)) {
+        insertObj[key] = new Date(insertObj[key]);
+      }
+    });
 
     try {
       await db.insert(cfg.reservationTable).values(insertObj);
@@ -327,25 +339,56 @@ export const GET: RequestHandler = async ({ url, request }) => {
     return error(404, { message: 'User not found' });
   }
 
-  // Get borrowed books (status = 'borrowed' OR 'overdue')
+  // itemType support for GET status queries
+  const typeParam = url.searchParams.get('itemType') || 'book';
+  const type = String(typeParam).toLowerCase();
+  const tableMapping: Record<string, any> = {
+    book: {
+      borrowing: tbl_book_borrowing,
+      reservation: tbl_book_reservation,
+      fk: 'bookId'
+    },
+    magazine: {
+      borrowing: tbl_magazine_borrowing,
+      reservation: tbl_magazine_reservation,
+      fk: 'magazineId'
+    },
+    thesis: {
+      borrowing: tbl_thesis_borrowing,
+      reservation: tbl_thesis_reservation,
+      fk: 'thesisId'
+    },
+    journal: {
+      borrowing: tbl_journal_borrowing,
+      reservation: tbl_journal_reservation,
+      fk: 'journalId'
+    }
+  };
+
+  const tables = tableMapping[type];
+  if (!tables) {
+    return error(400, { message: 'Unsupported itemType' });
+  }
+
+  // Get borrowed items (status = 'borrowed' OR 'overdue')
   const borrowed = await db
-    .select({ bookId: tbl_book_borrowing.bookId })
-    .from(tbl_book_borrowing)
+    .select({ bookId: tables.borrowing[tables.fk] })
+    .from(tables.borrowing)
     .where(
       and(
-        eq(tbl_book_borrowing.userId, userRow.id),
-        or(eq(tbl_book_borrowing.status, 'borrowed'), eq(tbl_book_borrowing.status, 'overdue'))
+        eq(tables.borrowing.userId, userRow.id),
+        or(eq(tables.borrowing.status, 'borrowed'), eq(tables.borrowing.status, 'overdue'))
       )
     );
 
-  // Get reserved books (status = 'active' OR 'borrow_request')
+  // Get reserved items (status = 'active' OR 'borrow_request')
   const reserved = await db
-    .select({ bookId: tbl_book_reservation.bookId })
-    .from(tbl_book_reservation)
+    .select({ bookId: tables.reservation[tables.fk] })
+    .from(tables.reservation)
     .where(
       and(
-        eq(tbl_book_reservation.userId, userRow.id),
-        or(eq(tbl_book_reservation.status, 'active'), eq(tbl_book_reservation.status, 'borrow_request'))
+        eq(tables.reservation.userId, userRow.id),
+        or(eq(tables.reservation.status, 'active'), eq(tables.reservation.status, 'borrow_request'))
       )
     );
 

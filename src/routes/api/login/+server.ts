@@ -7,6 +7,7 @@ import jwt, { type Secret } from 'jsonwebtoken';
 import { z } from 'zod';
 import type { ZodIssue } from 'zod';
 import { dev } from '$app/environment';
+import { logUserActivity } from '$lib/server/db/activity.js';
 
 // Environment variables - ensure these are set
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
@@ -161,6 +162,12 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 
         // Log successful login (don't log password or sensitive data)
         console.log(`Successful login: ${foundUser.username} (${foundUser.userType}) from ${clientIP}`);
+        // record activity for the user so they can view it later
+        logUserActivity({
+            userId: foundUser.id,
+            activityType: 'login',
+            details: `Logged in from ${clientIP}`
+        });
 
         // Return success response with user data (excluding password)
         return new Response(
