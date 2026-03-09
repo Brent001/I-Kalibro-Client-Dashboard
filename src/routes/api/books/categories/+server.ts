@@ -4,7 +4,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import jwt from 'jsonwebtoken';
 import { db } from '$lib/server/db/index.js';
-import { user, category, book } from '$lib/server/db/schema/schema.js'; // <-- use user table
+import { tbl_user, tbl_category, tbl_book } from '$lib/server/db/schema/schema.js';
 import { eq, not, count } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
@@ -26,11 +26,11 @@ async function checkDuplicateName(name: string, excludeId?: number): Promise<boo
   const normalizedName = normalizeCategoryName(name);
   
   const query = db
-    .select({ id: category.id, name: category.name })
-    .from(category);
+    .select({ id: tbl_category.id, name: tbl_category.name })
+    .from(tbl_category);
     
   if (excludeId) {
-    const existing = await query.where(not(eq(category.id, excludeId)));
+    const existing = await query.where(not(eq(tbl_category.id, excludeId)));
     return existing.some(cat => normalizeCategoryName(cat.name) === normalizedName);
   } else {
     const existing = await query;
@@ -66,21 +66,21 @@ async function authenticateUser(request: Request): Promise<AuthenticatedUser | n
 
     const [userRow] = await db
       .select({
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        isActive: user.isActive
+        id: tbl_user.id,
+        username: tbl_user.username,
+        email: tbl_user.email,
+        userType: tbl_user.userType,
+        isActive: tbl_user.isActive
       })
-      .from(user)
-      .where(eq(user.id, userId))
+      .from(tbl_user)
+      .where(eq(tbl_user.id, userId))
       .limit(1);
 
     if (!userRow || !userRow.isActive) return null;
 
     return {
       id: userRow.id,
-      role: userRow.role || '',
+      userType: userRow.userType || '',
       username: userRow.username || '',
       email: userRow.email || ''
     };
@@ -99,14 +99,23 @@ export const GET: RequestHandler = async ({ request }) => {
     // }
 
     // Fetch categories from the database
-    const categoriesResult = await db
+    const itemTypeParam = request.url ? new URL(request.url).searchParams.get('itemType') : null;
+    const query = db
       .select({
-        id: category.id,
-        name: category.name,
-        description: category.description
+        id: tbl_category.id,
+        name: tbl_category.name,
+        description: tbl_category.description,
+        itemType: tbl_category.itemType
       })
-      .from(category)
-      .orderBy(category.name);
+      .from(tbl_category);
+
+    if (itemTypeParam) {
+      query.where(eq(tbl_category.itemType, itemTypeParam));
+    }
+
+    query.orderBy(tbl_category.name);
+
+    const categoriesResult = await query;
 
     return json({
       success: true,
@@ -149,8 +158,8 @@ export const POST: RequestHandler = async ({ request }) => {
     // Check for duplicate category name (case-insensitive)
     const normalizedName = normalizeCategoryName(name);
     const existing = await db
-      .select({ id: category.id, name: category.name })
-      .from(category);
+      .select({ id: tbl_category.id, name: tbl_category.name })
+      .from(tbl_category);
     
     const duplicate = existing.find(cat => 
       normalizeCategoryName(cat.name ?? '') === normalizedName
@@ -164,15 +173,15 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Insert new category with the original casing preserved
     const [inserted] = await db
-      .insert(category)
+      .insert(tbl_category)
       .values({
         name,
         description: description || null
       })
       .returning({
-        id: category.id,
-        name: category.name,
-        description: category.description
+        id: tbl_category.id,
+        name: tbl_category.name,
+        description: tbl_category.description
       });
 
     return json({
@@ -223,8 +232,8 @@ export const PUT: RequestHandler = async ({ request }) => {
     // Check if category exists
     const [existingCategory] = await db
       .select()
-      .from(category)
-      .where(eq(category.id, id))
+      .from(tbl_category)
+      .where(eq(tbl_category.id, id))
       .limit(1);
 
     if (!existingCategory) {
@@ -234,9 +243,9 @@ export const PUT: RequestHandler = async ({ request }) => {
     // Check for duplicate name (case-insensitive, excluding current category)
     const normalizedName = normalizeCategoryName(name);
     const allCategories = await db
-      .select({ id: category.id, name: category.name })
-      .from(category)
-      .where(not(eq(category.id, id)));
+      .select({ id: tbl_category.id, name: tbl_category.name })
+      .from(tbl_category)
+      .where(not(eq(tbl_category.id, id)));
     
     const duplicate = allCategories.find(cat => 
       normalizeCategoryName(cat.name ?? '') === normalizedName
@@ -250,16 +259,16 @@ export const PUT: RequestHandler = async ({ request }) => {
 
     // Update category
     const [updated] = await db
-      .update(category)
+      .update(tbl_category)
       .set({ 
         name, 
         description: description || null
       })
-      .where(eq(category.id, id))
+      .where(eq(tbl_category.id, id))
       .returning({
-        id: category.id,
-        name: category.name,
-        description: category.description
+        id: tbl_category.id,
+        name: tbl_category.name,
+        description: tbl_category.description
       });
 
     return json({
@@ -297,8 +306,8 @@ export const DELETE: RequestHandler = async ({ request }) => {
     // Check if category exists
     const [existingCategory] = await db
       .select()
-      .from(category)
-      .where(eq(category.id, id))
+      .from(tbl_category)
+      .where(eq(tbl_category.id, id))
       .limit(1);
 
     if (!existingCategory) {
@@ -306,19 +315,19 @@ export const DELETE: RequestHandler = async ({ request }) => {
     }
 
     // Check if category is used by any books
-    const usedByBooks = await db.select({ count: count() }).from(book).where(eq(book.categoryId, id));
+    const usedByBooks = await db.select({ count: count() }).from(tbl_book).where(eq(tbl_book.categoryId, id));
     if (usedByBooks[0]?.count > 0) {
       throw error(400, { message: 'Cannot delete category: It is assigned to one or more books.' });
     }
 
     // Delete category
     const [deleted] = await db
-      .delete(category)
-      .where(eq(category.id, id))
+      .delete(tbl_category)
+      .where(eq(tbl_category.id, id))
       .returning({
-        id: category.id,
-        name: category.name,
-        description: category.description
+        id: tbl_category.id,
+        name: tbl_category.name,
+        description: tbl_category.description
       });
 
     return json({

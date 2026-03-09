@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types.js';
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db/index.js';
-import { user } from '$lib/server/db/schema/schema.js';
+import { tbl_user } from '$lib/server/db/schema/schema.js';
 import { eq, or } from 'drizzle-orm';
 import { redisClient } from '$lib/server/db/cache.js';
 
@@ -66,15 +66,15 @@ export const POST: RequestHandler = async ({ request }) => {
     // Find user by email or username
     const [userRow] = await db
       .select({ 
-        id: user.id, 
-        email: user.email,
-        username: user.username 
+        id: tbl_user.id, 
+        email: tbl_user.email,
+        username: tbl_user.username 
       })
-      .from(user)
+      .from(tbl_user)
       .where(
         or(
-          eq(user.email, trimmedIdentifier.toLowerCase()),
-          eq(user.username, trimmedIdentifier)
+          eq(tbl_user.email, trimmedIdentifier.toLowerCase()),
+          eq(tbl_user.username, trimmedIdentifier)
         )
       )
       .limit(1);

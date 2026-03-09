@@ -1,230 +1,237 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount } from "svelte";
   import { page } from "$app/stores";
   import { goto } from "$app/navigation";
   import { browser } from "$app/environment";
+  import { writable, get } from "svelte/store";
+  import NotificationContainer from "./notificationContainer.svelte";
+  import { notifications } from "$lib/stores/notificationStore.js";
 
   export let onLogout: () => void = () => {};
-
+  
+  const sidebarOpen = writable(false);
   let isLoggingOut = false;
-  let showUserMenu = false;
-  let isScrolled = false;
-
-  // User session state
-  let user: {
+  let showLogoutOptions = false;
+  let showNotificationPanel = false;
+  let showLogoutConfirm = false;
+  let logoutAllDevices = false;
+  
+  const userStore = writable<{
     id?: string;
     name?: string;
     username?: string;
     email?: string;
-    role?: string;
+    userType?: string;
     isActive?: boolean;
-  } | null = null;
+  } | null>(null);
+  
+  const isLoadingStore = writable(true);
+  const sessionErrorStore = writable(false);
+  
+  type UserType = {
+    id?: string;
+    name?: string;
+    username?: string;
+    email?: string;
+    userType?: string;
+    isActive?: boolean;
+  } | null;
+
+  let user: UserType = null;
   let isLoadingUser = true;
   let sessionError = false;
+  
+  $: user = $userStore;
+  $: isLoadingUser = $isLoadingStore;
+  $: sessionError = $sessionErrorStore;
 
-  // Navigation configuration
   const navigation = [
     {
       name: "Home",
       href: "/dashboard",
-      icon: `<svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9 22V12h6v10"/>
-      </svg>`,
-      activeIcon: `<svg class="h-6 w-6" fill="currentColor" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
-        <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-        <path d="M9 22V12h6v10"/>
-      </svg>`
+      roles: ["student", "faculty", "client", "guest"],
+      // Filled house icon
+      icon: `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z"/><path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a.75.75 0 0 0 .091-.086L12 5.432Z"/></svg>`,
+      description: "Dashboard overview"
     },
     {
       name: "Books",
       href: "/dashboard/books",
-      icon: `<svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-      </svg>`,
-      activeIcon: `<svg class="h-6 w-6" fill="currentColor" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
-        <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-      </svg>`
+      roles: ["student", "faculty", "client", "guest"],
+      // Filled open book icon
+      icon: `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M11.25 4.533A9.707 9.707 0 0 0 6 3a9.735 9.735 0 0 0-3.25.555.75.75 0 0 0-.5.707v14.25a.75.75 0 0 0 1 .707A8.237 8.237 0 0 1 6 18.75c1.995 0 3.823.707 5.25 1.886V4.533ZM12.75 20.636A8.214 8.214 0 0 1 18 18.75c.966 0 1.89.166 2.75.47a.75.75 0 0 0 1-.708V4.262a.75.75 0 0 0-.5-.707A9.735 9.735 0 0 0 18 3a9.707 9.707 0 0 0-5.25 1.533v16.103Z"/></svg>`,
+      description: "Browse catalog"
+    },
+    {
+      name: "Magazines",
+      href: "/dashboard/magazines",
+      roles: ["student", "faculty", "client", "guest"],
+      // Filled newspaper/magazine icon
+      icon: `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M4.125 3C3.089 3 2.25 3.84 2.25 4.875V18a3 3 0 0 0 3 3h15a3 3 0 0 1-3-3V4.875C17.25 3.839 16.41 3 15.375 3H4.125ZM12 9.75a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 0-1.5H12Zm-.75-2.25a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5H12a.75.75 0 0 1-.75-.75ZM6 12.75a.75.75 0 0 0 0 1.5h7.5a.75.75 0 0 0 0-1.5H6Zm-.75 3.75a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5H6a.75.75 0 0 1-.75-.75ZM6 6.75a.75.75 0 0 0-.75.75v3c0 .414.336.75.75.75h3a.75.75 0 0 0 .75-.75v-3A.75.75 0 0 0 9 6.75H6Z" clip-rule="evenodd"/><path d="M18.75 6.75h1.875c.621 0 1.125.504 1.125 1.125V18a1.5 1.5 0 0 1-3 0V6.75Z"/></svg>`,
+      description: "Browse periodicals"
+    },
+    {
+      name: "Research Docs",
+      href: "/dashboard/research",
+      roles: ["student", "faculty", "client", "guest"],
+      // Filled document-magnifying-glass icon
+      icon: `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M11.625 16.5a1.875 1.875 0 1 0 0-3.75 1.875 1.875 0 0 0 0 3.75Z"/><path fill-rule="evenodd" d="M5.625 1.5H9a3.75 3.75 0 0 1 3.75 3.75v1.875c0 1.036.84 1.875 1.875 1.875H16.5a3.75 3.75 0 0 1 3.75 3.75v7.875c0 1.035-.84 1.875-1.875 1.875H5.625a1.875 1.875 0 0 1-1.875-1.875V3.375c0-1.036.84-1.875 1.875-1.875Zm6 16.5a3.375 3.375 0 1 0 0-6.75 3.375 3.375 0 0 0 0 6.75Zm2.424.12a.75.75 0 0 1 .531.22l1.5 1.5a.75.75 0 0 1-1.06 1.06l-1.5-1.5a.75.75 0 0 1 .529-1.28Z" clip-rule="evenodd"/><path d="M14.25 5.25a5.23 5.23 0 0 0-1.279-3.434 9.768 9.768 0 0 1 6.963 6.963A5.23 5.23 0 0 0 16.5 7.5h-1.875a.375.375 0 0 1-.375-.375V5.25Z"/></svg>`,
+      description: "Papers & documents"
+    },
+    {
+      name: "Journal",
+      href: "/dashboard/journal",
+      roles: ["student", "faculty", "client", "guest"],
+      // Filled clipboard/journal icon
+      icon: `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M7.502 6h7.128A3.375 3.375 0 0 1 18 9.375v9.375a3 3 0 0 0 3-3V6.108c0-1.505-1.125-2.811-2.664-2.94a48.972 48.972 0 0 0-.673-.05A3 3 0 0 0 15 1.5h-1.5a3 3 0 0 0-2.663 1.618c-.225.015-.45.032-.673.05C8.662 3.295 7.554 4.542 7.502 6ZM13.5 3A1.5 1.5 0 0 0 12 4.5h4.5A1.5 1.5 0 0 0 15 3h-1.5Z" clip-rule="evenodd"/><path fill-rule="evenodd" d="M3 9.375C3 8.339 3.84 7.5 4.875 7.5h9.75c1.036 0 1.875.84 1.875 1.875v11.25c0 1.035-.84 1.875-1.875 1.875h-9.75A1.875 1.875 0 0 1 3 20.625V9.375Zm9.586 4.594a.75.75 0 0 0-1.172-.938l-2.476 3.096-.908-.907a.75.75 0 0 0-1.06 1.06l1.5 1.5a.75.75 0 0 0 1.116-.062l3-3.75Z" clip-rule="evenodd"/></svg>`,
+      description: "Scholarly journals"
+    },
+    {
+      name: "New Arrivals",
+      href: "/dashboard/new",
+      roles: ["student", "faculty", "client", "guest"],
+      // Filled sparkles/star icon
+      icon: `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M9 4.5a.75.75 0 0 1 .721.544l.813 2.846a3.75 3.75 0 0 0 2.576 2.576l2.846.813a.75.75 0 0 1 0 1.442l-2.846.813a3.75 3.75 0 0 0-2.576 2.576l-.813 2.846a.75.75 0 0 1-1.442 0l-.813-2.846a3.75 3.75 0 0 0-2.576-2.576l-2.846-.813a.75.75 0 0 1 0-1.442l2.846-.813A3.75 3.75 0 0 0 7.466 7.89l.813-2.846A.75.75 0 0 1 9 4.5ZM18 1.5a.75.75 0 0 1 .728.568l.258 1.036c.236.94.97 1.674 1.91 1.91l1.036.258a.75.75 0 0 1 0 1.456l-1.036.258c-.94.236-1.674.97-1.91 1.91l-.258 1.036a.75.75 0 0 1-1.456 0l-.258-1.036a2.625 2.625 0 0 0-1.91-1.91l-1.036-.258a.75.75 0 0 1 0-1.456l1.036-.258a2.625 2.625 0 0 0 1.91-1.91l.258-1.036A.75.75 0 0 1 18 1.5ZM16.5 15a.75.75 0 0 1 .712.513l.394 1.183c.15.447.5.799.948.948l1.183.395a.75.75 0 0 1 0 1.422l-1.183.395c-.447.15-.799.5-.948.948l-.395 1.183a.75.75 0 0 1-1.422 0l-.395-1.183a1.5 1.5 0 0 0-.948-.948l-1.183-.395a.75.75 0 0 1 0-1.422l1.183-.395c.447-.15.799-.5.948-.948l.395-1.183A.75.75 0 0 1 16.5 15Z" clip-rule="evenodd"/></svg>`,
+      description: "Recently added titles"
     },
     {
       name: "My Books",
       href: "/dashboard/issued",
-      icon: `<svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z"/>
-      </svg>`,
-      activeIcon: `<svg class="h-6 w-6" fill="currentColor" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
-        <path d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z"/>
-      </svg>`
+      roles: ["student", "faculty"],
+      // Filled bookmark stack icon
+      icon: `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M7.5 3.375c0-1.036.84-1.875 1.875-1.875h.375a3.75 3.75 0 0 1 3.75 3.75v1.875C13.5 8.161 14.34 9 15.375 9h1.875A3.75 3.75 0 0 1 21 12.75v3.375C21 17.16 20.16 18 19.125 18h-9.75A1.875 1.875 0 0 1 7.5 16.125V3.375Z"/><path d="M15 5.25a5.23 5.23 0 0 0-1.279-3.434 9.768 9.768 0 0 1 6.963 6.963A5.23 5.23 0 0 0 16.5 7.5h-1.875A.375.375 0 0 1 14.25 7.125v-.938a.375.375 0 0 0-.375-.375h-.563A.375.375 0 0 1 13.5 5.25H15ZM4.875 6H6a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H4.875a1.875 1.875 0 0 1-1.875-1.875V7.875C3 6.839 3.84 6 4.875 6Z"/></svg>`,
+      description: "Issued books"
     },
     {
-      name: "QR Scan",
-      href: "/dashboard/qr_scanner",
-      icon: `<svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z"/>
-        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z"/>
-      </svg>`,
-      activeIcon: `<svg class="h-6 w-6" fill="currentColor" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
-        <path d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z"/>
-        <path d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z"/>
-      </svg>`
+      name: "QR View",
+      href: "/dashboard/qr_view",
+      roles: ["student", "faculty"],
+      // Filled QR code icon
+      icon: `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M3 4.875C3 3.839 3.84 3 4.875 3h4.5C10.41 3 11.25 3.84 11.25 4.875v4.5c0 1.036-.84 1.875-1.875 1.875h-4.5A1.875 1.875 0 0 1 3 9.375v-4.5ZM4.875 4.5a.375.375 0 0 0-.375.375v4.5c0 .207.168.375.375.375h4.5a.375.375 0 0 0 .375-.375v-4.5a.375.375 0 0 0-.375-.375h-4.5Zm7.875.375c0-1.036.84-1.875 1.875-1.875h4.5C20.16 3 21 3.84 21 4.875v4.5c0 1.036-.84 1.875-1.875 1.875h-4.5a1.875 1.875 0 0 1-1.875-1.875v-4.5Zm1.875-.375a.375.375 0 0 0-.375.375v4.5c0 .207.168.375.375.375h4.5a.375.375 0 0 0 .375-.375v-4.5a.375.375 0 0 0-.375-.375h-4.5ZM6 6.75a.75.75 0 0 1 .75-.75h.75a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-.75.75H6.75A.75.75 0 0 1 6 7.5v-.75Zm9.75 0a.75.75 0 0 1 .75-.75h.75a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-.75.75h-.75a.75.75 0 0 1-.75-.75v-.75ZM3 14.625c0-1.036.84-1.875 1.875-1.875h4.5c1.036 0 1.875.84 1.875 1.875v4.5c0 1.035-.84 1.875-1.875 1.875h-4.5A1.875 1.875 0 0 1 3 19.125v-4.5Zm1.875-.375a.375.375 0 0 0-.375.375v4.5c0 .207.168.375.375.375h4.5a.375.375 0 0 0 .375-.375v-4.5a.375.375 0 0 0-.375-.375h-4.5Zm7.875-.75a.75.75 0 0 1 .75-.75h.75a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-.75.75h-.75a.75.75 0 0 1-.75-.75v-.75Zm6 0a.75.75 0 0 1 .75-.75h.75a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-.75.75h-.75a.75.75 0 0 1-.75-.75v-.75ZM6 16.5a.75.75 0 0 1 .75-.75h.75a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-.75.75H6.75a.75.75 0 0 1-.75-.75v-.75Zm9.75 0a.75.75 0 0 1 .75-.75h.75a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-.75.75h-.75a.75.75 0 0 1-.75-.75v-.75Zm-3 3a.75.75 0 0 1 .75-.75h.75a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-.75.75h-.75a.75.75 0 0 1-.75-.75v-.75Zm6 0a.75.75 0 0 1 .75-.75h.75a.75.75 0 0 1 .75.75v.75a.75.75 0 0 1-.75.75h-.75a.75.75 0 0 1-.75-.75v-.75Z" clip-rule="evenodd"/></svg>`,
+      description: "Show QR for time in/out"
     },
     {
       name: "Profile",
       href: "/dashboard/profile",
-      icon: `<svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/>
-      </svg>`,
-      activeIcon: `<svg class="h-6 w-6" fill="currentColor" stroke="currentColor" stroke-width="1" viewBox="0 0 24 24">
-        <path d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"/>
-      </svg>`
+      roles: ["student", "faculty", "client"],
+      // Filled user circle icon
+      icon: `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M18.685 19.097A9.723 9.723 0 0 0 21.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 0 0 3.065 7.097A9.716 9.716 0 0 0 12 21.75a9.716 9.716 0 0 0 6.685-2.653Zm-12.54-1.285A7.486 7.486 0 0 1 12 15a7.486 7.486 0 0 1 5.855 2.812A8.224 8.224 0 0 1 12 20.25a8.224 8.224 0 0 1-5.855-2.438ZM15.75 9a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z" clip-rule="evenodd"/></svg>`,
+      description: "Account settings"
     }
   ];
+
+  $: visibleNavigation = (() => {
+    const userType = (user && user.userType) ? String(user.userType).toLowerCase() : 'guest';
+    return navigation.filter(nav => {
+      if (!nav.roles) return true;
+      return nav.roles.map(r => String(r).toLowerCase()).includes(userType);
+    });
+  })();
 
   let currentPath = "";
   $: currentPath = $page.url.pathname;
 
-  // Fetch user session with retry logic
+  $: activeNavHref = (() => {
+    const matching = visibleNavigation
+      .filter(nav => currentPath === nav.href || currentPath.startsWith(nav.href + "/"))
+      .sort((a, b) => b.href.length - a.href.length);
+    return matching.length > 0 ? matching[0].href : "";
+  })();
+
+  // Reactive page title and icon — updates instantly when route changes
+  $: activeNavItem = visibleNavigation.find(nav => nav.href === activeNavHref);
+  $: pageTitle = activeNavItem?.name ?? "Dashboard";
+  $: activePageIcon = activeNavItem?.icon ?? `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z"/><path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a.75.75 0 0 0 .091-.086L12 5.432Z"/></svg>`;
+
   async function fetchUserSession() {
     if (!browser) return;
-    
+    if (get(userStore) !== null) { isLoadingStore.set(false); return; }
     try {
-      isLoadingUser = true;
-      sessionError = false;
-      
-      const response = await fetch('/api/auth/session', {
-        method: 'GET',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
+      isLoadingStore.set(true);
+      sessionErrorStore.set(false);
+      const response = await fetch('/api/auth/session', { method: 'GET', credentials: 'include', headers: { 'Content-Type': 'application/json' } });
       if (response.ok) {
         const result = await response.json();
-        if (result.success && result.data?.user) {
-          user = result.data.user;
-          sessionError = false;
-        } else {
-          sessionError = true;
-        }
+        if (result.success && result.data?.user) userStore.set(result.data.user);
+        else sessionErrorStore.set(true);
       } else if (response.status === 401) {
-        user = null;
-        if (browser) window.location.href = '/';
-      } else {
-        sessionError = true;
-      }
-    } catch (error) {
-      console.error('Session fetch error:', error);
-      sessionError = true;
-    } finally {
-      isLoadingUser = false;
-    }
+        userStore.set(null);
+        if (browser) await goto('/', { replaceState: true, noScroll: true });
+      } else { sessionErrorStore.set(true); }
+    } catch { sessionErrorStore.set(true); }
+    finally { isLoadingStore.set(false); }
   }
 
-  async function handleLogout() {
+  async function handleLogout(logoutAllDevicesFlag: boolean = false) {
     if (isLoggingOut) return;
-    
-    isLoggingOut = true;
-    showUserMenu = false;
-    
+    isLoggingOut = true; showLogoutOptions = false; showLogoutConfirm = false;
     try {
-      const response = await fetch('/api/logout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ reason: 'user_logout' })
-      });
-      
+      const response = await fetch('/api/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ logoutAllDevices: logoutAllDevicesFlag, reason: 'user_logout' }) });
       const result = await response.json();
-      
       if (result.success) {
-        showNotification('Logged out successfully', 'success');
-        user = null;
-        onLogout();
-        setTimeout(() => { 
-          if (browser) window.location.href = '/'; 
-        }, 800);
+        userStore.set(null); onLogout();
+        notifications.show(logoutAllDevicesFlag ? 'Logged out from all devices successfully' : 'Logged out successfully', 'success');
+        if (browser) await goto('/', { replaceState: true, noScroll: true });
       } else {
-        showNotification(result.message || 'Logout error', 'warning');
-        setTimeout(() => { 
-          if (browser) window.location.href = '/'; 
-        }, 1500);
+        notifications.show(result.message || 'Logout completed with some issues', 'warning');
+        if (browser) await goto('/', { replaceState: true, noScroll: true });
       }
-    } catch (error) {
-      console.error('Logout error:', error);
-      showNotification('Network error during logout. Redirecting...', 'error');
-      setTimeout(() => { 
-        if (browser) window.location.href = '/'; 
-      }, 1500);
-    } finally {
-      isLoggingOut = false;
+    } catch {
+      notifications.show('Network error during logout. Redirecting...', 'error');
+      if (browser) await goto('/', { replaceState: true, noScroll: true });
+    } finally { isLoggingOut = false; }
+  }
+
+  function handleClickOutside(event: Event) {
+    if (showLogoutOptions) { const t = event.target as Element; if (!t.closest('.logout-menu')) showLogoutOptions = false; }
+    if (showNotificationPanel) { const t = event.target as Element; if (!t.closest('.notification-panel') && !t.closest('.notification-bell')) showNotificationPanel = false; }
+  }
+
+  function getNotificationIconColor(type: string) {
+    switch (type) { case 'success': return 'text-emerald-600'; case 'error': return 'text-red-600'; case 'warning': return 'text-amber-600'; default: return 'text-blue-600'; }
+  }
+
+  function getNotificationIcon(type: string) {
+    switch (type) {
+      case 'success': return `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>`;
+      case 'error': return `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>`;
+      case 'warning': return `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>`;
+      default: return `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>`;
     }
   }
 
-  // Enhanced notification system with auto-dismiss
-  type NotificationType = 'success' | 'error' | 'warning';
-  type Notification = {
-    id: number;
-    message: string;
-    type: NotificationType;
-  };
-  
-  let notifications: Notification[] = [];
-  let notificationId = 0;
-  
-  function showNotification(message: string, type: NotificationType = 'success') {
-    const id = ++notificationId;
-    notifications = [...notifications, { id, message, type }];
-    
-    setTimeout(() => {
-      notifications = notifications.filter(n => n.id !== id);
-    }, 5000);
-  }
-  
-  function removeNotification(id: number) {
-    notifications = notifications.filter(n => n.id !== id);
+  function formatTimestamp(date: Date) {
+    const now = new Date(); const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000); const hours = Math.floor(diff / 3600000); const days = Math.floor(diff / 86400000);
+    if (minutes < 1) return 'Just now'; if (minutes < 60) return `${minutes}m ago`; if (hours < 24) return `${hours}h ago`; return `${days}d ago`;
   }
 
-  // Close user menu when clicking outside
-  function handleClickOutside(event: MouseEvent) {
-    if (showUserMenu) {
-      const target = event.target as Element;
-      if (!target.closest('.user-menu')) {
-        showUserMenu = false;
-      }
-    }
-  }
-
-  // Handle scroll for header shadow
-  function handleScroll() {
-    isScrolled = window.scrollY > 10;
-  }
-
-  // Keyboard navigation
-  function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === 'Escape' && showUserMenu) {
-      showUserMenu = false;
-    }
+  function handleNotificationAction(notification: any) {
+    if (notification.actionUrl) { showNotificationPanel = false; window.location.href = notification.actionUrl; }
   }
 
   onMount(() => {
     if (browser) {
       fetchUserSession();
+      let isCheckPending = false;
+      const sessionCheckInterval = setInterval(async () => {
+        if (isCheckPending || !$userStore) return;
+        try {
+          isCheckPending = true;
+          const response = await fetch('/api/auth/session', { method: 'GET', credentials: 'include', headers: { 'Content-Type': 'application/json' } });
+          if (response.status === 401) { userStore.set(null); notifications.show('Your session has been revoked. Please log in again.', 'error'); if (browser) await goto('/', { replaceState: true, noScroll: true }); }
+          else if (!response.ok) { userStore.set(null); if (browser) await goto('/', { replaceState: true, noScroll: true }); }
+        } catch { console.error('Session check failed'); }
+        finally { isCheckPending = false; }
+      }, 60000);
       document.addEventListener('click', handleClickOutside);
-      window.addEventListener('scroll', handleScroll);
-      window.addEventListener('keydown', handleKeyDown);
+      return () => { document.removeEventListener('click', handleClickOutside); clearInterval(sessionCheckInterval); };
     }
   });
 
-  onDestroy(() => {
-    if (browser) {
-      document.removeEventListener('click', handleClickOutside);
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('keydown', handleKeyDown);
-    }
-  });
-
-  function getPageTitle(path: string): string {
-    const nav = navigation.find(n => n.href === path);
-    return nav ? nav.name : "Dashboard";
+  function capitalize(str: string | undefined) {
+    if (!str) return "";
+    return str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   }
 
   function getUserInitials(): string {
@@ -234,329 +241,330 @@
   }
 </script>
 
-<!-- Notifications Container -->
-{#if notifications.length > 0}
-  <div class="fixed top-4 right-4 z-[100] space-y-2 max-w-sm" role="alert" aria-live="polite">
-    {#each notifications as notification (notification.id)}
-      <div 
-        class="flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg backdrop-blur-sm 
-          transform transition-all duration-300 ease-out animate-slide-in
-          {notification.type === 'success' ? 'bg-emerald-500/90 text-white' : 
-           notification.type === 'error' ? 'bg-red-500/90 text-white' : 
-           'bg-amber-500/90 text-white'}"
-      >
-        <div class="flex-shrink-0">
-          {#if notification.type === 'success'}
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-          {:else if notification.type === 'error'}
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
-            </svg>
-          {:else}
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"/>
-            </svg>
-          {/if}
+<div class="flex h-screen bg-gradient-to-br from-[#E8F5E9] via-[#F5F5DC] to-[#FFF8E1]">
+
+  <!-- ═══════════════════════════════════════
+       SIDEBAR
+  ════════════════════════════════════════ -->
+  <aside
+    class="fixed inset-y-0 left-0 z-50 w-[264px] flex flex-col
+           bg-white border-r border-slate-200/80
+           shadow-[4px_0_24px_-4px_rgba(0,0,0,0.08)]
+           transform transition-transform duration-300 ease-in-out
+           lg:translate-x-0 lg:static lg:inset-0"
+    class:translate-x-0={$sidebarOpen}
+    class:-translate-x-full={!$sidebarOpen}
+  >
+
+    <!-- Logo bar -->
+    <div class="h-[60px] px-4 flex items-center justify-between
+                bg-gradient-to-r from-[#0D5C29] to-[#1a7a3a]
+                border-b border-[#0a4a21] flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <img src="/assets/logo.png" alt="e-Kalibro Logo" class="w-10 h-10 object-contain flex-shrink-0 drop-shadow-md" />
+        <div>
+          <h1 class="text-[16px] font-bold text-white leading-none tracking-tight">e-Kalibro</h1>
+          <p class="text-[9px] text-[#E8B923] font-semibold uppercase tracking-[0.12em] mt-0.5">Library System</p>
         </div>
-        <span class="text-sm font-medium flex-1">{notification.message}</span>
-        <button 
-          on:click={() => removeNotification(notification.id)}
-          class="flex-shrink-0 text-white/80 hover:text-white transition-colors rounded-lg p-1 hover:bg-white/10"
-          aria-label="Close notification"
+      </div>
+      <button
+        class="lg:hidden w-7 h-7 flex items-center justify-center rounded-md hover:bg-white/15 transition-colors"
+        on:click={() => sidebarOpen.set(false)} aria-label="Close sidebar"
+      >
+        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Nav section label -->
+    <div class="px-4 pt-4 pb-1.5 flex-shrink-0">
+      <span class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.14em]">Navigation</span>
+    </div>
+
+    <!-- Nav items -->
+    <nav class="flex-1 overflow-y-auto px-2.5 pb-2 space-y-0.5 sidebar-nav">
+      {#each visibleNavigation as item}
+        <a
+          href={item.href}
+          class="group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150
+            {activeNavHref === item.href
+              ? 'bg-[#0D5C29] text-white shadow-sm'
+              : 'text-slate-600 hover:bg-[#F0FAF3] hover:text-[#0D5C29]'}"
+          on:click|preventDefault={async () => { sidebarOpen.set(false); await goto(item.href, { noScroll: true }); }}
         >
-          <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          {#if activeNavHref === item.href}
+            <span class="absolute left-0 inset-y-2 w-[3px] bg-[#E8B923] rounded-r-full"></span>
+          {/if}
+          <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-all
+            {activeNavHref === item.href
+              ? 'bg-white/15 text-[#E8B923]'
+              : 'bg-slate-100 text-slate-500 group-hover:bg-[#D9F0E1] group-hover:text-[#0D5C29]'}">
+            {@html item.icon}
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-[14px] leading-none truncate">{item.name}</p>
+            <p class="text-[11.5px] mt-1 truncate leading-none
+              {activeNavHref === item.href ? 'text-white/60' : 'text-slate-400 group-hover:text-[#4A7C59]'}">
+              {item.description}
+            </p>
+          </div>
+          {#if activeNavHref === item.href}
+            <span class="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-[#E8B923]"></span>
+          {/if}
+        </a>
+      {/each}
+    </nav>
+
+    <!-- Divider -->
+    <div class="mx-4 h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent flex-shrink-0"></div>
+
+    <!-- User card -->
+    <div class="p-3 flex-shrink-0">
+      <div class="flex items-center gap-2.5 px-2 py-2 mb-2 rounded-lg bg-gradient-to-r from-[#F0FAF3] to-[#FAFFF6] border border-[#C8E6C9]">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-[#0D5C29] to-[#4A7C59] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm ring-2 ring-[#C8E6C9]">
+          {getUserInitials()}
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[13px] font-semibold text-slate-800 truncate leading-none">{user?.username || 'User'}</p>
+          <div class="flex items-center gap-1 mt-0.5">
+            <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full flex-shrink-0"></span>
+            <p class="text-[10px] text-slate-500 truncate">{capitalize(user?.userType || 'guest')}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="relative logout-menu">
+        <button
+          on:click|stopPropagation={() => showLogoutOptions = !showLogoutOptions}
+          disabled={isLoggingOut}
+          class="flex items-center justify-center gap-1.5 w-full px-3 py-2 text-[12px] font-medium rounded-lg transition-all duration-150
+                 text-slate-600 bg-slate-50 border border-slate-200
+                 hover:bg-[#FFF3E0] hover:text-[#B8560B] hover:border-[#E8B923]/50
+                 {isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''}"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+          <span>{isLoggingOut ? 'Signing out…' : 'Sign out'}</span>
+        </button>
+
+        {#if showLogoutOptions && !isLoggingOut}
+          <div class="absolute bottom-full left-0 right-0 mb-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-slideUp">
+            <button
+              on:click={() => { logoutAllDevices = false; showLogoutConfirm = true; }}
+              class="flex items-center gap-2.5 w-full px-4 py-2.5 text-[12px] text-slate-700 hover:bg-[#F0FAF3] hover:text-[#0D5C29] transition-colors"
+            >
+              <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+              </svg>
+              <span class="font-medium">Sign out this device</span>
+            </button>
+            <div class="h-px bg-slate-100 mx-3"></div>
+            <button
+              on:click={() => { logoutAllDevices = true; showLogoutConfirm = true; }}
+              class="flex items-center gap-2.5 w-full px-4 py-2.5 text-[12px] text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              </svg>
+              <span class="font-medium">Sign out all devices</span>
+            </button>
+          </div>
+        {/if}
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════════
+       MAIN CONTENT
+  ════════════════════════════════════════ -->
+  <div class="flex-1 flex flex-col overflow-hidden min-w-0">
+
+    <!-- Top header -->
+    <header class="h-16 sm:h-[4.25rem] bg-gradient-to-r from-white via-[#FFFBF0] to-[#FFF8E6] shadow-md border-b-2 border-[#E8B923]/30 flex items-center justify-between px-3 sm:px-6 z-10 flex-shrink-0">
+      <div class="flex items-center gap-2 sm:gap-4 min-w-0">
+        <button class="lg:hidden p-2 hover:bg-[#E8B923]/10 rounded-lg transition-colors shrink-0" on:click={() => sidebarOpen.set(true)} aria-label="Open menu">
+          <svg class="h-5 w-5 text-slate-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
           </svg>
         </button>
-      </div>
-    {/each}
-  </div>
-{/if}
-
-<div class="min-h-screen bg-white pb-20 lg:pb-0">
-  <!-- Desktop Header -->
-  <header 
-    class="hidden lg:block bg-slate-900/95 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 transition-shadow duration-200
-      {isScrolled ? 'shadow-lg' : 'shadow-sm'}"
-  >
-    <div class="max-w-7xl mx-auto px-4 py-2"> <!-- px-6 py-4 -> px-4 py-2 -->
-      <div class="flex items-center justify-between">
-        <!-- Logo and Title -->
-        <div class="flex items-center gap-4"> <!-- gap-6 -> gap-4 -->
-          <button 
-            on:click={() => goto('/dashboard')}
-            class="flex items-center gap-2 group"
-          >
-            <div class="w-8 h-8 bg-gradient-to-br from-slate-700 to-slate-900 rounded-xl flex items-center justify-center shadow-lg 
-              group-hover:shadow-xl group-hover:scale-105 transition-all duration-200"> <!-- w-10 h-10 -> w-8 h-8 -->
-              <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"> <!-- h-6 w-6 -> h-5 w-5 -->
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-              </svg>
-            </div>
-            <div>
-              <h1 class="text-lg font-bold text-white group-hover:text-slate-100 transition-colors">i-Kalibro</h1> <!-- text-xl -> text-lg -->
-              <p class="text-xs text-slate-300">Library System</p> <!-- text-sm -> text-xs -->
-            </div>
-          </button>
-          
-          <!-- Desktop Navigation -->
-          <nav class="flex items-center gap-0.5" role="navigation" aria-label="Main navigation"> <!-- gap-1 -> gap-0.5 -->
-            {#each navigation as item}
-              <a
-                href={item.href}
-                class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-xl 
-                  transition-all duration-200 relative group
-                  {currentPath === item.href
-                    ? 'bg-slate-800 text-white shadow-sm'
-                    : 'text-slate-300 hover:bg-slate-800/50 hover:text-white'}"
-                on:click|preventDefault={() => goto(item.href)}
-                aria-current={currentPath === item.href ? 'page' : undefined}
-              >
-                <span class="flex-shrink-0 transition-transform duration-200 group-hover:scale-110">
-                  {@html currentPath === item.href ? item.activeIcon : item.icon}
-                </span>
-                <span>{item.name}</span>
-                {#if currentPath === item.href}
-                  <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full"></div>
-                {/if}
-              </a>
-            {/each}
-          </nav>
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+          <!-- Dynamic icon: matches the active page's sidebar icon -->
+          <div class="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-[#0D5C29] to-[#4A7C59] rounded-lg flex items-center justify-center border-2 border-[#E8B923]/40 shadow-sm shrink-0
+                      [&_svg]:w-4 [&_svg]:h-4 [&_svg]:text-[#E8B923] [&_svg]:fill-[#E8B923]">
+            {@html activePageIcon}
+          </div>
+          <div class="min-w-0">
+            <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-none truncate">{pageTitle}</h1>
+            <p class="text-[11px] sm:text-sm text-slate-500 mt-0.5 truncate">Welcome back, {user?.username || 'User'}</p>
+          </div>
         </div>
+      </div>
 
-        <!-- User Menu -->
-        <div class="relative user-menu">
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <!-- Notifications bell -->
+        <div class="relative notification-bell">
           <button
-            on:click|stopPropagation={() => showUserMenu = !showUserMenu}
-            class="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-800 
-              transition-all duration-200 group"
-            aria-expanded={showUserMenu}
-            aria-haspopup="true"
+            class="relative p-2 text-slate-500 hover:text-[#0D5C29] hover:bg-[#E8B923]/10 rounded-lg transition-all duration-150 border border-transparent hover:border-[#E8B923]/30"
+            aria-label="Notifications"
+            on:click={() => showNotificationPanel = !showNotificationPanel}
           >
-            <div class="w-9 h-9 bg-gradient-to-br from-slate-700 to-slate-900 rounded-full 
-              flex items-center justify-center shadow-md group-hover:shadow-lg 
-              transition-all duration-200 group-hover:scale-105">
-              {#if isLoadingUser}
-                <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-              {:else}
-                <span class="text-sm font-semibold text-white">{getUserInitials()}</span>
-              {/if}
-            </div>
-            <div class="hidden lg:block text-left">
-              {#if isLoadingUser}
-                <div class="space-y-1.5">
-                  <div class="h-3 bg-slate-800 rounded w-20 animate-pulse"></div>
-                  <div class="h-2 bg-slate-800 rounded w-24 animate-pulse"></div>
-                </div>
-              {:else if user}
-                <p class="text-sm font-medium text-white truncate max-w-[150px]">
-                  {user.name || user.username}
-                </p>
-                <p class="text-xs text-slate-300 truncate max-w-[150px]">{user.email}</p>
-              {:else}
-                <p class="text-sm font-medium text-white">Guest</p>
-                <p class="text-xs text-slate-300">Not logged in</p>
-              {/if}
-            </div>
-            <svg 
-              class="h-4 w-4 text-slate-400 transition-transform duration-200 
-                {showUserMenu ? 'rotate-180' : ''}" 
-              fill="none" 
-              stroke="currentColor" 
-              stroke-width="2" 
-              viewBox="0 0 24 24"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7C18 6.279 15.464 4 12.25 4s-5.75 2.279-5.75 5.05v.7a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
             </svg>
+            {#if $notifications.length > 0}
+              <span class="absolute -top-0.5 -right-0.5 h-4 w-4 bg-gradient-to-br from-[#E8B923] to-[#B8860B] text-white text-[10px] rounded-full flex items-center justify-center font-bold shadow ring-2 ring-white">
+                {$notifications.length > 9 ? '9+' : $notifications.length}
+              </span>
+            {:else}
+              <span class="absolute top-1.5 right-1.5 h-2 w-2 bg-[#E8B923] rounded-full ring-2 ring-white"></span>
+            {/if}
           </button>
 
-          <!-- User Dropdown -->
-          {#if showUserMenu}
-            <div 
-              class="absolute right-0 top-full mt-2 w-64 bg-slate-900 rounded-xl 
-                shadow-xl border border-slate-800 py-2 z-50 
-                animate-dropdown-fade-in"
-              role="menu"
-            >
-              {#if user}
-                <div class="px-4 py-3 border-b border-slate-800">
-                  <p class="text-sm font-medium text-white truncate">
-                    {user.name || user.username}
-                  </p>
-                  <p class="text-xs text-slate-300 truncate">{user.email}</p>
-                  {#if user.role}
-                    <span class="inline-block mt-1.5 px-2 py-0.5 text-xs font-medium 
-                      bg-slate-800 text-slate-300 rounded-md capitalize">
-                      {user.role}
-                    </span>
-                  {/if}
+          {#if showNotificationPanel}
+            <div class="fixed sm:absolute right-2 sm:right-0 left-2 sm:left-auto top-14 sm:top-auto sm:mt-2 w-auto sm:w-96 bg-white rounded-xl shadow-2xl border-2 border-[#E8B923]/40 z-50 overflow-hidden notification-panel animate-slideDown">
+              <div class="bg-gradient-to-r from-[#0D5C29] to-[#4A7C59] px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-[#E8B923]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                  </svg>
+                  <h3 class="text-sm font-bold text-white">Notifications</h3>
                 </div>
-              {/if}
-              
-              <div class="py-1">
-                <button
-                  on:click={handleLogout}
-                  class="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-400 
-                    hover:bg-slate-800 transition-colors duration-200
-                    {isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''}"
-                  disabled={isLoggingOut}
-                  role="menuitem"
-                >
-                  {#if isLoggingOut}
-                    <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                      <path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Signing out...</span>
-                  {:else}
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/>
-                    </svg>
-                    <span>Sign out</span>
+                <div class="flex items-center gap-2">
+                  {#if $notifications.length > 0}
+                    <button on:click={() => notifications.clear()} class="text-xs text-white/70 hover:text-white underline">Clear all</button>
                   {/if}
-                </button>
+                  <button on:click={() => showNotificationPanel = false} class="text-white/70 hover:text-white hover:bg-white/20 rounded p-1 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="max-h-96 overflow-y-auto">
+                {#if $notifications.length === 0}
+                  <div class="p-8 text-center">
+                    <div class="w-14 h-14 bg-[#F0FAF3] border-2 border-[#C8E6C9] rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg class="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                      </svg>
+                    </div>
+                    <p class="text-sm font-semibold text-slate-800 mb-1">All caught up!</p>
+                    <p class="text-xs text-slate-400">No new notifications</p>
+                  </div>
+                {:else}
+                  <div class="divide-y divide-slate-100">
+                    {#each $notifications as notification (notification.id)}
+                      <div class="p-4 hover:bg-[#F0FAF3] transition-colors cursor-pointer group">
+                        <div class="flex gap-3">
+                          <div class="flex-shrink-0 mt-0.5">
+                            <div class="w-8 h-8 {getNotificationIconColor(notification.type)} bg-opacity-10 rounded-lg flex items-center justify-center border border-current border-opacity-20">
+                              {@html getNotificationIcon(notification.type)}
+                            </div>
+                          </div>
+                          <div class="flex-1 min-w-0">
+                            {#if notification.title}<h4 class="text-sm font-semibold text-slate-900 mb-0.5">{notification.title}</h4>{/if}
+                            <p class="text-sm text-slate-600 leading-relaxed">{notification.message}</p>
+                            <div class="flex items-center justify-between mt-1.5">
+                              {#if notification.timestamp}<span class="text-xs text-slate-400">{formatTimestamp(notification.timestamp)}</span>{:else}<span></span>{/if}
+                              {#if notification.actionText && notification.actionUrl}
+                                <button on:click={() => handleNotificationAction(notification)} class="text-xs font-semibold text-[#0D5C29] hover:underline">{notification.actionText} →</button>
+                              {/if}
+                            </div>
+                          </div>
+                          <button on:click={() => notifications.remove(notification.id)} class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 rounded p-1 transition-all flex-shrink-0">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                          </button>
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
               </div>
             </div>
           {/if}
         </div>
-      </div>
-    </div>
-  </header>
 
-  <!-- Mobile Header -->
-  <header class="lg:hidden bg-slate-900/95 backdrop-blur-md shadow-sm border-b border-slate-800 sticky top-0 z-40">
-    <div class="flex items-center justify-between px-6 py-4">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-gradient-to-br from-slate-700 to-slate-900 rounded-lg flex items-center justify-center">
-          <svg class="h-5 w-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+        <!-- User avatar chip -->
+        <div class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg bg-white border border-slate-200 shadow-sm">
+          <div class="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-[#0D5C29] to-[#4A7C59] text-white rounded-full flex items-center justify-center font-bold text-xs shrink-0">
+            {getUserInitials()}
+          </div>
+          <span class="text-xs sm:text-sm font-semibold text-slate-700 hidden sm:block">{user?.username || 'User'}</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Page content -->
+    <main class="flex-1 overflow-y-auto bg-gradient-to-br from-[#F5F5DC] via-[#FDFBF3] to-[#FFF9E6] p-2 sm:p-3">
+      <div class="max-w-7xl mx-auto w-full">
+        <slot />
+      </div>
+    </main>
+  </div>
+
+  <!-- Mobile overlay -->
+  {#if $sidebarOpen}
+    <div
+      class="fixed inset-0 z-40 bg-slate-900/25 backdrop-blur-sm lg:hidden"
+      on:click={() => sidebarOpen.set(false)}
+      on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { sidebarOpen.set(false); e.preventDefault(); } }}
+      role="button" tabindex="0" aria-label="Close sidebar"
+    ></div>
+  {/if}
+
+  <!-- Logout confirm modal -->
+  {#if showLogoutConfirm}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+      <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-5 sm:p-6 border border-slate-200 animate-scaleIn">
+        <div class="mx-auto w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4 border-2 border-red-100">
+          <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
           </svg>
         </div>
-        <h1 class="text-lg font-bold text-white">{getPageTitle(currentPath)}</h1>
-      </div>
-
-      <div class="w-8 h-8 bg-gradient-to-br from-slate-700 to-slate-900 rounded-full flex items-center justify-center">
-        {#if isLoadingUser}
-          <div class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-        {:else}
-          <span class="text-xs font-semibold text-white">{getUserInitials()}</span>
-        {/if}
-      </div>
-    </div>
-  </header>
-
-  <!-- Page Content -->
-  <main class="max-w-7xl mx-auto px-4 lg:px-6 py-6">
-    <slot />
-  </main>
-
-  <!-- Mobile Bottom Navigation -->
-  <nav 
-    class="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md 
-      border-t border-slate-800 z-50 safe-area-bottom"
-    role="navigation" 
-    aria-label="Mobile navigation"
-  >
-    <div class="flex items-center justify-around px-1 py-2">
-      {#each navigation as item}
-        <a
-          href={item.href}
-          class="flex flex-col items-center justify-center px-2 py-2 min-w-0 flex-1 
-            transition-all duration-200 rounded-lg
-            {currentPath === item.href
-              ? 'text-white'
-              : 'text-slate-300 active:bg-slate-800'}"
-          on:click|preventDefault={() => goto(item.href)}
-          aria-current={currentPath === item.href ? 'page' : undefined}
-        >
-          <div class="mb-1 transition-transform duration-200 
-            {currentPath === item.href ? 'scale-110' : 'scale-100'}">
-            {@html currentPath === item.href ? item.activeIcon : item.icon}
-          </div>
-          <span class="text-xs font-medium truncate w-full text-center">
-            {item.name}
-          </span>
-          {#if currentPath === item.href}
-            <div class="w-1 h-1 bg-white rounded-full mt-1"></div>
-          {/if}
-        </a>
-      {/each}
-      
-      <!-- Mobile Logout Button -->
-      <button
-        on:click={handleLogout}
-        class="flex flex-col items-center justify-center px-2 py-2 min-w-0 flex-1 
-          text-red-400 hover:text-red-300 active:bg-slate-800 transition-all duration-200 rounded-lg
-          {isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''}"
-        disabled={isLoggingOut}
-        aria-label="Logout"
-      >
-        <div class="mb-1">
-          {#if isLoggingOut}
-            <svg class="animate-spin h-6 w-6" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-          {:else}
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"/>
-            </svg>
-          {/if}
+        <h3 class="text-base sm:text-lg font-bold text-slate-900 text-center mb-1.5">
+          {logoutAllDevices ? 'Sign out everywhere?' : 'Sign out?'}
+        </h3>
+        <p class="text-slate-500 text-center text-xs sm:text-sm mb-5 leading-relaxed">
+          {logoutAllDevices
+            ? 'You will be signed out from all devices and active sessions.'
+            : 'Are you sure you want to sign out from this device?'}
+        </p>
+        <div class="flex gap-2.5">
+          <button
+            on:click={() => showLogoutConfirm = false}
+            class="flex-1 px-4 py-2 text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors"
+          >Cancel</button>
+          <button
+            on:click={() => handleLogout(logoutAllDevices)}
+            disabled={isLoggingOut}
+            class="flex-1 px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-lg font-medium transition-colors disabled:opacity-50"
+          >{isLoggingOut ? 'Signing out…' : 'Sign out'}</button>
         </div>
-        <span class="text-xs font-medium">
-          {isLoggingOut ? 'Out' : 'Logout'}
-        </span>
-      </button>
+      </div>
     </div>
-  </nav>
+  {/if}
 </div>
 
+<NotificationContainer />
+
 <style>
-  @keyframes slide-in {
-    from {
-      transform: translateX(100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes slideUp   { from { opacity: 0; transform: translateY(8px);  } to { opacity: 1; transform: translateY(0); } }
+  @keyframes scaleIn   { from { opacity: 0; transform: scale(0.96);      } to { opacity: 1; transform: scale(1);    } }
 
-  @keyframes dropdown-fade-in {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
+  .animate-slideDown { animation: slideDown 0.18s ease-out; }
+  .animate-slideUp   { animation: slideUp   0.18s ease-out; }
+  .animate-scaleIn   { animation: scaleIn   0.18s ease-out; }
 
-  .animate-slide-in {
-    animation: slide-in 0.3s ease-out;
-  }
+  .sidebar-nav { scrollbar-width: none; -ms-overflow-style: none; }
+  .sidebar-nav::-webkit-scrollbar { display: none; }
 
-  .animate-dropdown-fade-in {
-    animation: dropdown-fade-in 0.2s ease-out;
-  }
+  :global(html) { scroll-behavior: smooth; }
 
-  /* Safe area for mobile devices with notches */
-  .safe-area-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
+  main::-webkit-scrollbar { width: 6px; }
+  main::-webkit-scrollbar-track { background: transparent; }
+  main::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #E8B923, #B8860B); border-radius: 99px; }
+  main::-webkit-scrollbar-thumb:hover { background: #B8860B; }
 
-  /* Smooth scrolling */
-  :global(html) {
-    scroll-behavior: smooth;
-  }
-
-  /* Focus visible styles for accessibility */
-  :global(*:focus-visible) {
-    outline: 2px solid rgb(148 163 184);
-    outline-offset: 2px;
-  }
+  :global(*:focus-visible) { outline: 2px solid #E8B923; outline-offset: 2px; border-radius: 6px; }
 </style>

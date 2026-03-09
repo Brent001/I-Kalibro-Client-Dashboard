@@ -4,7 +4,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import jwt from 'jsonwebtoken';
 import { db } from '$lib/server/db/index.js';
-import { book, user, category, bookBorrowing } from '$lib/server/db/schema/schema.js'; // <-- use bookBorrowing instead of bookTransaction
+import { tbl_book, tbl_user, tbl_category, tbl_book_borrowing } from '$lib/server/db/schema/schema.js';
 import { eq, count, sum, gt } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
@@ -38,19 +38,19 @@ async function authenticateUser(request: Request): Promise<AuthenticatedUser | n
     if (!userId) return null;
     const [userRow] = await db
       .select({
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        isActive: user.isActive
+        id: tbl_user.id,
+        username: tbl_user.username,
+        email: tbl_user.email,
+        userType: tbl_user.userType,
+        isActive: tbl_user.isActive
       })
-      .from(user)
-      .where(eq(user.id, userId))
+      .from(tbl_user)
+      .where(eq(tbl_user.id, userId))
       .limit(1);
     if (!userRow || !userRow.isActive) return null;
     return {
       id: userRow.id,
-      role: userRow.role || '',
+      userType: userRow.userType || '',
       username: userRow.username || '',
       email: userRow.email || ''
     };
@@ -66,36 +66,36 @@ export const GET: RequestHandler = async ({ request }) => {
     if (!user) throw error(401, { message: 'Unauthorized' });
 
     // Total books
-    const totalBooksResult = await db.select({ count: count() }).from(book);
+    const totalBooksResult = await db.select({ count: count() }).from(tbl_book);
     const totalBooks = totalBooksResult[0]?.count || 0;
 
     // Total available copies
-    const availableCopiesResult = await db.select({ total: sum(book.copiesAvailable) }).from(book);
+    const availableCopiesResult = await db.select({ total: sum(tbl_book.availableCopies) }).from(tbl_book);
     const availableCopies = Number(availableCopiesResult[0]?.total) || 0;
 
     // Currently borrowed books (active borrow transactions)
     const borrowedBooksResult = await db
       .select({ count: count() })
-      .from(bookBorrowing)
-      .where(eq(bookBorrowing.status, 'borrowed'));
+      .from(tbl_book_borrowing)
+      .where(eq(tbl_book_borrowing.status, 'borrowed'));
     const borrowedBooks = borrowedBooksResult[0]?.count || 0;
 
     // Dynamic categories count
-    const categoriesCountResult = await db.select({ count: count() }).from(category);
+    const categoriesCountResult = await db.select({ count: count() }).from(tbl_category);
     const categoriesCount = categoriesCountResult[0]?.count || 0;
 
     // Books with low availability (<3 copies)
     const lowStockResult = await db
       .select({ count: count() })
-      .from(book)
-      .where(gt(3, book.copiesAvailable));
+      .from(tbl_book)
+      .where(gt(3, tbl_book.availableCopies));
     const lowStock = lowStockResult[0]?.count || 0;
 
     // Out of stock books
     const outOfStockResult = await db
       .select({ count: count() })
-      .from(book)
-      .where(eq(book.copiesAvailable, 0));
+      .from(tbl_book)
+      .where(eq(tbl_book.availableCopies, 0));
     const outOfStock = outOfStockResult[0]?.count || 0;
 
     // Total physical copies (available + borrowed)

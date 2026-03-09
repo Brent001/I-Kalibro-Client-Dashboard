@@ -4,7 +4,7 @@ import bcrypt from 'bcrypt';
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db/index.js';
-import { user } from '$lib/server/db/schema/schema.js';
+import { tbl_user } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 import { redisClient } from '$lib/server/db/cache.js';
 
@@ -76,9 +76,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Validate user exists using the email from OTP data
     const [userRow] = await db
-      .select({ id: user.id, email: user.email })
-      .from(user)
-      .where(eq(user.email, normalizedEmail))
+      .select({ id: tbl_user.id, email: tbl_user.email })
+      .from(tbl_user)
+      .where(eq(tbl_user.email, normalizedEmail))
       .limit(1);
 
     if (!userRow) {
@@ -125,12 +125,12 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Update password in database
     await db
-      .update(user)
+      .update(tbl_user)
       .set({ 
         password: hashedPassword,
         updatedAt: new Date()
       })
-      .where(eq(user.email, normalizedEmail));
+      .where(eq(tbl_user.email, normalizedEmail));
 
     console.log(`[Reset Password] Password updated in database for ${normalizedEmail}`);
 

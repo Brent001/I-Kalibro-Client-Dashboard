@@ -2,8 +2,8 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import jwt from 'jsonwebtoken';
 import { db } from '$lib/server/db/index.js';
-import { user, qrCodeToken } from '$lib/server/db/schema/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { tbl_user, tbl_student, tbl_faculty } from '$lib/server/db/schema/schema.js';
+import { eq } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
@@ -20,9 +20,9 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 
     // Verify user exists and is active
     const [userRow] = await db
-      .select({ id: user.id, isActive: user.isActive })
-      .from(user)
-      .where(eq(user.id, userId))
+      .select({ id: tbl_user.id, isActive: tbl_user.isActive })
+      .from(tbl_user)
+      .where(eq(tbl_user.id, userId))
       .limit(1);
 
     if (!userRow || !userRow.isActive) {
@@ -35,37 +35,42 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       return json({ error: 'Invalid QR content' }, { status: 400 });
     }
 
-    // Require QR code to start with LIBVISIT-
-    if (!content.startsWith('LIBVISIT-')) {
-      return json({ error: 'Only library visit QR codes are allowed.' }, { status: 400 });
-    }
-
-    // Check if QR code exists in qrCodeToken table and is type 'library_visit'
-    const [qrRow] = await db
-      .select()
-      .from(qrCodeToken)
-      .where(
-        and(
-          eq(qrCodeToken.token, content),
-          eq(qrCodeToken.type, 'library_visit')
-        )
-      )
+    // Interpret scanned content as student enrollmentNo or facultyNumber
+    const studentRows = await db
+      .select({ userId: tbl_student.userId, enrollmentNo: tbl_student.enrollmentNo })
+      .from(tbl_student)
+      .where(eq(tbl_student.enrollmentNo, content))
       .limit(1);
 
-    if (!qrRow) {
-      return json({ error: 'QR code is not valid, not recognized, or not a library visit QR.' }, { status: 400 });
+    if (studentRows.length > 0) {
+      const student = studentRows[0];
+      const [userInfo] = await db.select({ id: tbl_user.id, username: tbl_user.username, name: tbl_user.name, userType: tbl_user.userType })
+        .from(tbl_user)
+        .where(eq(tbl_user.id, student.userId))
+        .limit(1);
+      if (userInfo) {
+        return json({ success: true, processed: true, user: userInfo, type: 'student' });
+      }
     }
 
-    // Here you would process time in (e.g., insert into libraryVisit table)
-    // Example pseudo-logic:
-    // await db.insert(libraryVisit).values({ userId, timeIn: new Date(), qrToken: content });
+    const facultyRows = await db
+      .select({ userId: tbl_faculty.userId, facultyNumber: tbl_faculty.facultyNumber })
+      .from(tbl_faculty)
+      .where(eq(tbl_faculty.facultyNumber, content))
+      .limit(1);
 
-    return json({
-      success: true,
-      processed: true,
-      timestamp: new Date().toISOString(),
-      message: 'Time in recorded successfully'
-    });
+    if (facultyRows.length > 0) {
+      const faculty = facultyRows[0];
+      const [userInfo] = await db.select({ id: tbl_user.id, username: tbl_user.username, name: tbl_user.name, userType: tbl_user.userType })
+        .from(tbl_user)
+        .where(eq(tbl_user.id, faculty.userId))
+        .limit(1);
+      if (userInfo) {
+        return json({ success: true, processed: true, user: userInfo, type: 'faculty' });
+      }
+    }
+
+    return json({ error: 'Scanned ID not found (not a student or faculty number)' }, { status: 400 });
 
   } catch (error) {
     console.error('QR processing API error:', error);

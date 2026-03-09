@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { db } from '$lib/server/db/index.js';
-import { user, student, faculty } from '$lib/server/db/schema/schema.js';
+import { tbl_user, tbl_student, tbl_faculty } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
 
@@ -85,20 +85,20 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // Check for duplicate email
-    const emailExists = await db.select({ id: user.id }).from(user).where(eq(user.email, body.email.toLowerCase())).limit(1);
+    const emailExists = await db.select({ id: tbl_user.id }).from(tbl_user).where(eq(tbl_user.email, body.email.toLowerCase())).limit(1);
     if (emailExists.length > 0) {
       return json({ success: false, message: 'Email address is already registered' }, { status: 409 });
     }
 
     // Check for duplicate username
-    const usernameExists = await db.select({ id: user.id }).from(user).where(eq(user.username, body.username.toLowerCase())).limit(1);
+    const usernameExists = await db.select({ id: tbl_user.id }).from(tbl_user).where(eq(tbl_user.username, body.username.toLowerCase())).limit(1);
     if (usernameExists.length > 0) {
       return json({ success: false, message: 'Username is already taken' }, { status: 409 });
     }
 
     // For students, check enrollment number uniqueness
     if (userRole === 'student' && body.enrollmentNo) {
-      const enrollmentExists = await db.select({ id: student.id }).from(student).where(eq(student.enrollmentNo, body.enrollmentNo)).limit(1);
+      const enrollmentExists = await db.select({ id: tbl_student.id }).from(tbl_student).where(eq(tbl_student.enrollmentNo, body.enrollmentNo)).limit(1);
       if (enrollmentExists.length > 0) {
         return json({ success: false, message: 'Enrollment number is already registered' }, { status: 409 });
       }
@@ -106,7 +106,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // For faculty, check faculty number uniqueness if provided
     if (userRole === 'faculty' && body.facultyNumber) {
-      const facultyNumberExists = await db.select({ id: faculty.id }).from(faculty).where(eq(faculty.facultyNumber, body.facultyNumber)).limit(1);
+      const facultyNumberExists = await db.select({ id: tbl_faculty.id }).from(tbl_faculty).where(eq(tbl_faculty.facultyNumber, body.facultyNumber)).limit(1);
       if (facultyNumberExists.length > 0) {
         return json({ success: false, message: 'Faculty number is already registered' }, { status: 409 });
       }
@@ -117,30 +117,30 @@ export const POST: RequestHandler = async ({ request }) => {
     const hashedPassword = await bcrypt.hash(body.password, passwordSalt);
 
     // Insert into user table
-    const [newUser] = await db.insert(user).values({
+    const [newUser] = await db.insert(tbl_user).values({
       name: body.name.trim(),
       email: body.email.toLowerCase().trim(),
       phone: body.phone?.trim() || null,
       username: body.username.toLowerCase().trim(),
       password: hashedPassword,
-      role: userRole,
+      userType: userRole,
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date()
     }).returning({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      username: user.username,
-      role: user.role,
-      isActive: user.isActive,
-      createdAt: user.createdAt
+      id: tbl_user.id,
+      name: tbl_user.name,
+      email: tbl_user.email,
+      phone: tbl_user.phone,
+      username: tbl_user.username,
+      userType: tbl_user.userType,
+      isActive: tbl_user.isActive,
+      createdAt: tbl_user.createdAt
     });
 
     // Insert into student or faculty table
     if (userRole === 'student') {
-      await db.insert(student).values({
+      await db.insert(tbl_student).values({
         userId: newUser.id,
         age: age,
         enrollmentNo: body.enrollmentNo.trim(),
@@ -150,7 +150,7 @@ export const POST: RequestHandler = async ({ request }) => {
         gender: body.gender || null
       });
     } else if (userRole === 'faculty') {
-      await db.insert(faculty).values({
+      await db.insert(tbl_faculty).values({
         userId: newUser.id,
         age: age,
         department: body.department,
@@ -170,7 +170,7 @@ export const POST: RequestHandler = async ({ request }) => {
         email: newUser.email,
         phone: newUser.phone,
         username: newUser.username,
-        role: newUser.role,
+        userType: newUser.userType,
         isActive: newUser.isActive,
         createdAt: newUser.createdAt
       }

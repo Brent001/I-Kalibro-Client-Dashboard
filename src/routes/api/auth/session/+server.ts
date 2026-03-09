@@ -2,7 +2,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 import jwt from 'jsonwebtoken';
 import { db } from '$lib/server/db/index.js';
-import { user } from '$lib/server/db/schema/schema.js'; // <-- changed from account to user
+import { tbl_user } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
@@ -79,15 +79,15 @@ export const GET: RequestHandler = async ({ request, getClientAddress, cookies }
         // Fetch user from database
         const [userRow] = await db
             .select({
-                id: user.id,
-                name: user.name,
-                username: user.username,
-                email: user.email,
-                role: user.role,
-                isActive: user.isActive
+                id: tbl_user.id,
+                name: tbl_user.name,
+                username: tbl_user.username,
+                email: tbl_user.email,
+                userType: tbl_user.userType,
+                isActive: tbl_user.isActive
             })
-            .from(user)
-            .where(eq(user.id, userId))
+            .from(tbl_user)
+            .where(eq(tbl_user.id, userId))
             .limit(1);
 
         if (!userRow) {
@@ -121,7 +121,7 @@ export const GET: RequestHandler = async ({ request, getClientAddress, cookies }
                     name: userRow.name,
                     username: userRow.username,
                     email: userRow.email,
-                    role: userRow.role,
+                    userType: userRow.userType,
                     isActive: userRow.isActive
                 },
                 sessionInfo: {

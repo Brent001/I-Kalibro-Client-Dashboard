@@ -2,8 +2,8 @@
 import jwt from 'jsonwebtoken';
 import { randomBytes, createHash } from 'crypto';
 import { db } from '$lib/server/db/index.js';
-import { staffAccount } from '$lib/server/db/schema/schema.js'; // <-- changed from account to staffAccount
-import { eq, and, gte, desc } from 'drizzle-orm';
+import { tbl_user } from '$lib/server/db/schema/schema.js';
+import { eq } from 'drizzle-orm';
 import { redisClient } from '$lib/server/db/cache.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
@@ -13,16 +13,16 @@ export interface AuthUser {
     id: number;
     name: string;
     username: string;
-    email: string;
-    role: 'admin' | 'staff';
+    email: string | null;
+    userType: 'student' | 'faculty';
     isActive: boolean;
 }
 
 export interface JWTPayload {
     userId: number;
     username: string;
-    email: string;
-    role: string;
+    email: string | null;
+    userType: string;
     sessionId: string;
     tokenType: 'access' | 'refresh';
     iat: number;
@@ -65,31 +65,31 @@ export async function verifyToken(token: string, tokenType: 'access' | 'refresh'
     try {
         const secret = tokenType === 'refresh' ? JWT_REFRESH_SECRET : JWT_SECRET;
         const decoded = jwt.verify(token, secret) as JWTPayload;
-        
+
         // Check if token is blacklisted
         const blacklistKey = tokenType === 'refresh' ? `blacklist:refresh:${token}` : `blacklist:${token}`;
         const isBlacklisted = await redisClient.get(blacklistKey);
         if (isBlacklisted) {
             return null;
         }
-        
+
         // Verify token type matches
         if (decoded.tokenType !== tokenType) {
             return null;
         }
-        
+
         // Fetch current user data from database
         const [user] = await db
             .select({
-                id: staffAccount.id,
-                name: staffAccount.name,
-                username: staffAccount.username,
-                email: staffAccount.email,
-                role: staffAccount.role,
-                isActive: staffAccount.isActive
+                id: tbl_user.id,
+                name: tbl_user.name,
+                username: tbl_user.username,
+                email: tbl_user.email,
+                userType: tbl_user.userType,
+                isActive: tbl_user.isActive
             })
-            .from(staffAccount)
-            .where(eq(staffAccount.id, decoded.userId))
+            .from(tbl_user)
+            .where(eq(tbl_user.id, decoded.userId))
             .limit(1);
 
         if (!user || !user.isActive) {
@@ -126,7 +126,7 @@ function hashToken(token: string): string {
  * Generate JWT token pair (access + refresh)
  */
 export async function generateTokens(
-    user: AuthUser, 
+    user: AuthUser,
     sessionInfo: { userAgent: string; ipAddress: string }
 ): Promise<{ accessToken: string; refreshToken: string; sessionId: string }> {
     const sessionId = generateSessionId();
@@ -137,7 +137,7 @@ export async function generateTokens(
         userId: user.id,
         username: user.username,
         email: user.email,
-        role: user.role,
+        userType: user.userType,
         sessionId,
         iat: Math.floor(Date.now() / 1000),
     };
@@ -178,7 +178,7 @@ export async function generateTokens(
         isActive: true
     };
 
-    await redisClient.setex(`session:${sessionId}`, 7 * 24 * 60 * 60, JSON.stringify(sessionData));
+    await redisClient.setex(`user_session:${sessionId}`, 7 * 24 * 60 * 60, JSON.stringify(sessionData));
     await redisClient.sadd(`user:${user.id}:sessions`, sessionId);
 
     return { accessToken, refreshToken, sessionId };
@@ -190,7 +190,7 @@ export async function generateTokens(
 export async function refreshAccessToken(refreshToken: string): Promise<{ accessToken: string } | null> {
     try {
         const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as JWTPayload;
-        
+
         // Check if refresh token is blacklisted
         const isBlacklisted = await redisClient.get(`blacklist:refresh:${refreshToken}`);
         if (isBlacklisted) {
@@ -198,7 +198,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
         }
 
         // Verify session exists and is active
-        const sessionData = await redisClient.get(`session:${decoded.sessionId}`);
+        const sessionData = await redisClient.get(`user_session:${decoded.sessionId}`);
         if (!sessionData) {
             return null;
         }
@@ -211,15 +211,15 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
         // Get fresh user data
         const [user] = await db
             .select({
-                id: staffAccount.id,
-                name: staffAccount.name,
-                username: staffAccount.username,
-                email: staffAccount.email,
-                role: staffAccount.role,
-                isActive: staffAccount.isActive
+                id: tbl_user.id,
+                name: tbl_user.name,
+                username: tbl_user.username,
+                email: tbl_user.email,
+                userType: tbl_user.userType,
+                isActive: tbl_user.isActive
             })
-            .from(staffAccount)
-            .where(eq(staffAccount.id, decoded.userId))
+            .from(tbl_user)
+            .where(eq(tbl_user.id, decoded.userId))
             .limit(1);
 
         if (!user || !user.isActive) {
@@ -233,7 +233,7 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
                 userId: user.id,
                 username: user.username,
                 email: user.email,
-                role: user.role,
+                userType: user.userType,
                 sessionId: decoded.sessionId,
                 tokenType: 'access',
                 jti,
@@ -247,10 +247,10 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
             }
         );
 
-        // Update session with new access token
+        // Update session with new access token hash
         session.token = hashToken(accessToken);
         session.lastUsedAt = new Date();
-        await redisClient.setex(`session:${decoded.sessionId}`, 7 * 24 * 60 * 60, JSON.stringify(session));
+        await redisClient.setex(`user_session:${decoded.sessionId}`, 7 * 24 * 60 * 60, JSON.stringify(session));
 
         return { accessToken };
     } catch (error) {
@@ -264,11 +264,11 @@ export async function refreshAccessToken(refreshToken: string): Promise<{ access
  */
 export async function updateSessionLastUsed(sessionId: string): Promise<void> {
     try {
-        const sessionData = await redisClient.get(`session:${sessionId}`);
+        const sessionData = await redisClient.get(`user_session:${sessionId}`);
         if (sessionData) {
             const session: UserSession = JSON.parse(sessionData);
             session.lastUsedAt = new Date();
-            await redisClient.setex(`session:${sessionId}`, 7 * 24 * 60 * 60, JSON.stringify(session));
+            await redisClient.setex(`user_session:${sessionId}`, 7 * 24 * 60 * 60, JSON.stringify(session));
         }
     } catch (error) {
         console.error('Failed to update session:', error);
@@ -280,17 +280,17 @@ export async function updateSessionLastUsed(sessionId: string): Promise<void> {
  */
 export async function revokeToken(sessionId: string, tokenType: 'access' | 'refresh' = 'access'): Promise<void> {
     try {
-        const sessionData = await redisClient.get(`session:${sessionId}`);
+        const sessionData = await redisClient.get(`user_session:${sessionId}`);
         if (sessionData) {
             const session: UserSession = JSON.parse(sessionData);
-            
+
             if (tokenType === 'access') {
                 // Mark session as inactive
                 session.isActive = false;
-                await redisClient.setex(`session:${sessionId}`, 7 * 24 * 60 * 60, JSON.stringify(session));
+                await redisClient.setex(`user_session:${sessionId}`, 7 * 24 * 60 * 60, JSON.stringify(session));
             } else {
                 // Remove session completely for refresh token revocation
-                await redisClient.del(`session:${sessionId}`);
+                await redisClient.del(`user_session:${sessionId}`);
                 await redisClient.srem(`user:${session.userId}:sessions`, sessionId);
             }
         }
@@ -306,17 +306,17 @@ export async function getUserSessions(userId: number): Promise<UserSession[]> {
     try {
         const sessionIds = await redisClient.smembers(`user:${userId}:sessions`);
         const sessions: UserSession[] = [];
-        
+
         for (const sessionId of sessionIds) {
-            const sessionData = await redisClient.get(`session:${sessionId}`);
+            const sessionData = await redisClient.get(`user_session:${sessionId}`);
             if (sessionData) {
                 const session: UserSession = JSON.parse(sessionData);
-                if (session.isActive && session.expiresAt > new Date()) {
+                if (session.isActive && new Date(session.expiresAt) > new Date()) {
                     sessions.push(session);
                 }
             }
         }
-        
+
         return sessions;
     } catch (error) {
         console.error('Failed to get user sessions:', error);
@@ -330,11 +330,11 @@ export async function getUserSessions(userId: number): Promise<UserSession[]> {
 export async function revokeAllUserSessions(userId: number): Promise<void> {
     try {
         const sessionIds = await redisClient.smembers(`user:${userId}:sessions`);
-        
+
         for (const sessionId of sessionIds) {
-            await redisClient.del(`session:${sessionId}`);
+            await redisClient.del(`user_session:${sessionId}`);
         }
-        
+
         await redisClient.del(`user:${userId}:sessions`);
     } catch (error) {
         console.error('Failed to revoke all user sessions:', error);
@@ -351,20 +351,20 @@ export async function logSecurityEvent(event: SecurityEvent): Promise<void> {
             id: randomBytes(16).toString('hex'),
             timestamp: event.timestamp.toISOString()
         };
-        
+
         // Store in Redis with TTL (30 days)
         await redisClient.setex(
-            `security_log:${logEntry.id}`, 
-            30 * 24 * 60 * 60, 
+            `security_log:${logEntry.id}`,
+            30 * 24 * 60 * 60,
             JSON.stringify(logEntry)
         );
-        
+
         // Add to user's security log index
         if (event.userId !== 'anonymous' && event.userId !== 'unknown') {
             await redisClient.lpush(`user:${event.userId}:security_log`, logEntry.id);
             await redisClient.ltrim(`user:${event.userId}:security_log`, 0, 100); // Keep last 100 events
         }
-        
+
         // Console log for immediate monitoring
         console.log(`[SECURITY] ${event.type.toUpperCase()}:`, {
             userId: event.userId,
@@ -372,7 +372,7 @@ export async function logSecurityEvent(event: SecurityEvent): Promise<void> {
             userAgent: event.userAgent.substring(0, 100),
             timestamp: event.timestamp
         });
-        
+
     } catch (error) {
         console.error('Failed to log security event:', error);
     }
@@ -383,16 +383,15 @@ export async function logSecurityEvent(event: SecurityEvent): Promise<void> {
  */
 export async function cleanupExpiredSessions(): Promise<void> {
     try {
-        // This would typically be run as a cron job
-        const pattern = 'session:*';
+        const pattern = 'user_session:*';
         const keys = await redisClient.keys(pattern);
-        
+
         for (const key of keys) {
             const sessionData = await redisClient.get(key);
             if (sessionData) {
                 const session: UserSession = JSON.parse(sessionData);
-                if (session.expiresAt <= new Date()) {
-                    const sessionId = key.replace('session:', '');
+                if (new Date(session.expiresAt) <= new Date()) {
+                    const sessionId = key.replace('user_session:', '');
                     await redisClient.del(key);
                     await redisClient.srem(`user:${session.userId}:sessions`, sessionId);
                 }
@@ -426,16 +425,10 @@ export function extractToken(request: Request): string | null {
 }
 
 /**
- * Check if user has required role
+ * Check if user matches a required user type
  */
-export function hasRole(user: AuthUser, requiredRole: 'admin' | 'staff'): boolean {
-    if (requiredRole === 'admin') {
-        return user.role === 'admin';
-    }
-    if (requiredRole === 'staff') {
-        return user.role === 'admin' || user.role === 'staff';
-    }
-    return false;
+export function hasUserType(user: AuthUser, requiredType: 'student' | 'faculty'): boolean {
+    return user.userType === requiredType;
 }
 
 /**
@@ -443,10 +436,10 @@ export function hasRole(user: AuthUser, requiredRole: 'admin' | 'staff'): boolea
  */
 export async function requireAuth(
     request: Request,
-    requiredRole?: 'admin' | 'staff'
+    requiredUserType?: 'student' | 'faculty'
 ): Promise<{ user: AuthUser } | { error: Response }> {
     const token = extractToken(request);
-    
+
     if (!token) {
         return {
             error: new Response(
@@ -457,7 +450,7 @@ export async function requireAuth(
     }
 
     const user = await verifyToken(token);
-    
+
     if (!user) {
         return {
             error: new Response(
@@ -467,10 +460,10 @@ export async function requireAuth(
         };
     }
 
-    if (requiredRole && !hasRole(user, requiredRole)) {
+    if (requiredUserType && !hasUserType(user, requiredUserType)) {
         return {
             error: new Response(
-                JSON.stringify({ success: false, message: 'Insufficient permissions' }),
+                JSON.stringify({ success: false, message: 'Access restricted to ' + requiredUserType + ' accounts' }),
                 { status: 403, headers: { 'Content-Type': 'application/json' } }
             )
         };
@@ -487,7 +480,7 @@ export function generateToken(user: AuthUser): string {
         userId: user.id,
         username: user.username,
         email: user.email,
-        role: user.role,
+        userType: user.userType,
         sessionId: generateSessionId(),
         tokenType: 'access',
         jti: randomBytes(16).toString('hex'),

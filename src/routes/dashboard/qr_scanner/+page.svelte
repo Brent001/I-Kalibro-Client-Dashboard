@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
   import { afterNavigate } from '$app/navigation';
-  import Layout from "$lib/components/ui/layout.svelte";
   import type { PageData } from './$types.js';
   
   export let data: PageData;
@@ -445,8 +444,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 </svelte:head>
 
-<Layout>
-  <div class="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
+<div class="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
     <div class="max-w-3xl mx-auto px-2 sm:px-4 py-2 sm:py-6">
       <!-- Header Section -->
       <div class="mb-3 sm:mb-6">
@@ -785,7 +783,6 @@
       {/if}
     </div>
   </div>
-</Layout>
 
 <style>
   /* Mobile-only compact styles (applies to screens smaller than 640px) */

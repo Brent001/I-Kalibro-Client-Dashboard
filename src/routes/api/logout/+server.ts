@@ -3,6 +3,7 @@ import { json } from '@sveltejs/kit';
 import jwt from 'jsonwebtoken';
 import { revokeToken, logSecurityEvent, getUserSessions, revokeAllUserSessions } from '$lib/server/db/auth.js';
 import { redisClient } from '$lib/server/db/cache.js';
+import { logUserActivity } from '$lib/server/db/activity.js';
 import { z } from 'zod';
 
 // Request validation schema
@@ -118,14 +119,19 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
                 ip: clientIP,
                 userAgent,
                 reason,
-                logoutAllDevices,
-                timestamp: new Date(),
-                metadata: {
-                    processingTime: Date.now() - startTime,
-                }
+                timestamp: new Date()
             });
-        } catch (error) {
-            console.warn('Security logging failed:', error);
+        } catch (err) {
+            console.error('Error logging security logout event', err);
+        }
+
+        // also insert a user activity record so they can view it
+        if (userId) {
+            logUserActivity({
+                userId: parseInt(userId),
+                activityType: 'logout',
+                details: `Logged out from ${clientIP}`
+            });
         }
 
         // Invalidate any cached user data
@@ -171,7 +177,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
                 {
                     success: false,
                     message: 'Invalid request parameters',
-                    errors: validationError.errors
+                    errors: validationError.issues
                 },
                 { status: 400 }
             );

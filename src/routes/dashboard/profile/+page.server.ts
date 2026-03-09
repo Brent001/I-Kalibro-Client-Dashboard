@@ -9,7 +9,6 @@ export const load: PageServerLoad = async ({ cookies, fetch }) => {
     if (!token) throw redirect(302, '/');
 
     try {
-        // Decode and verify JWT
         const decoded = jwt.verify(token, JWT_SECRET) as any;
         const userId = decoded.userId || decoded.id;
         if (!userId) {
@@ -17,7 +16,7 @@ export const load: PageServerLoad = async ({ cookies, fetch }) => {
             throw redirect(302, '/');
         }
 
-        // Fetch user profile
+        // /api/profile returns both the flat merged user AND stats
         const res = await fetch('/api/profile', {
             headers: { authorization: `Bearer ${token}` }
         });
@@ -26,28 +25,15 @@ export const load: PageServerLoad = async ({ cookies, fetch }) => {
         const data = await res.json();
         if (!data.success) throw redirect(302, '/');
 
-        // Merge extraInfo into user for easier access in Svelte page
-        let mergedUser = data.user;
-        if (data.extraInfo) {
-            mergedUser = { ...data.user, ...data.extraInfo };
-        }
-
-        // Optionally fetch stats
-        let stats = {};
-        const statsRes = await fetch('/api/dashboard/stats', {
-            headers: { authorization: `Bearer ${token}` }
-        });
-        if (statsRes.ok) {
-            const statsData = await statsRes.json();
-            if (statsData.success) stats = statsData.stats;
-        }
-
         return {
-            user: mergedUser,
-            stats
+            user:  data.user,   // already flat-merged (tbl_user + tbl_student/tbl_faculty)
+            stats: data.stats   // { totalBorrowedEver, currentlyBorrowed, libraryVisits }
         };
     } catch (error) {
-        if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
+        if (
+            error instanceof jwt.JsonWebTokenError ||
+            error instanceof jwt.TokenExpiredError
+        ) {
             cookies.delete('client_token', { path: '/' });
         }
         throw redirect(302, '/');
