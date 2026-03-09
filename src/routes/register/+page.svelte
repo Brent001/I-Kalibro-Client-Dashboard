@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { onDestroy } from 'svelte';
 
   let formData = {
     name: '',
@@ -32,6 +33,36 @@
     'Engineering', 'Medicine', 'Education', 'Arts & Sciences',
     'Library Services', 'Administration'
   ];
+
+  let otpSent = false;
+  let otpSuccessMsg = '';
+  let otpErrorMsg = '';
+  let otpResendTimer = 0;
+  let otpResendInterval: ReturnType<typeof setInterval> | null = null;
+  let otpVerified = false;
+  let otpEmailUsed = '';
+
+  onDestroy(() => { if (otpResendInterval) clearInterval(otpResendInterval); });
+
+  function resetOtpState() {
+    otpSent = false;
+    otpVerified = false;
+    otpSuccessMsg = '';
+    otpErrorMsg = '';
+    otpResendTimer = 0;
+    otpEmailUsed = '';
+    formData.otp = '';
+    if (otpResendInterval) clearInterval(otpResendInterval);
+    delete errors['otp'];
+    errors = { ...errors };
+  }
+
+  function handleEmailInput() {
+    clearError('email');
+    if (otpEmailUsed && formData.email !== otpEmailUsed) {
+      resetOtpState();
+    }
+  }
 
   function validateStep(step: number): boolean {
     const stepErrors: Record<string, string> = {};
@@ -73,6 +104,9 @@
       } else if (formData.password !== formData.confirmPassword) {
         stepErrors.confirmPassword = 'Passwords do not match';
       }
+      if (!otpVerified) {
+        stepErrors.otp = 'Please verify your email address before continuing';
+      }
     }
 
     if (step === 3) {
@@ -96,10 +130,16 @@
     clearStepErrors(currentStep);
     if (validateStep(currentStep)) {
       currentStep = Math.min(currentStep + 1, totalSteps);
+      showCourseDropdown = false;
+      showYearDropdown = false;
+      showGenderDropdown = false;
     }
   }
 
   function prevStep() {
+    showCourseDropdown = false;
+    showYearDropdown = false;
+    showGenderDropdown = false;
     currentStep = Math.max(currentStep - 1, 1);
   }
 
@@ -163,10 +203,86 @@
     }
   }
 
-  // Custom dropdowns
+  function startOtpResendTimer() {
+    otpResendTimer = 60;
+    if (otpResendInterval) clearInterval(otpResendInterval);
+    otpResendInterval = setInterval(() => {
+      otpResendTimer--;
+      if (otpResendTimer <= 0 && otpResendInterval) clearInterval(otpResendInterval);
+    }, 1000);
+  }
+
+  async function handleSendOtp() {
+    otpErrorMsg = '';
+    otpSuccessMsg = '';
+    if (!formData.email || errors.email) {
+      otpErrorMsg = 'Enter a valid email first.';
+      return;
+    }
+    otpVerified = false;
+    formData.otp = '';
+    delete errors['otp'];
+    errors = { ...errors };
+
+    try {
+      const res = await fetch('/api/register/send_otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email })
+      });
+      const data = await res.json();
+      if (data.success) {
+        otpSent = true;
+        otpEmailUsed = formData.email;
+        otpSuccessMsg = `OTP sent to ${data.maskedEmail || formData.email}`;
+        startOtpResendTimer();
+      } else {
+        otpErrorMsg = data.message || 'Failed to send OTP';
+      }
+    } catch (err) {
+      otpErrorMsg = 'Network error. Please try again.';
+    }
+  }
+
+  async function handleVerifyOtp() {
+    otpErrorMsg = '';
+    otpSuccessMsg = '';
+    if (!formData.otp || formData.otp.length !== 6) {
+      otpErrorMsg = 'Please enter a valid 6-digit OTP.';
+      return;
+    }
+    try {
+      const res = await fetch('/api/register/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, otp: formData.otp })
+      });
+      const data = await res.json();
+      if (data.success) {
+        otpSuccessMsg = 'OTP verified successfully!';
+        otpVerified = true;
+        delete errors['otp'];
+        errors = { ...errors };
+      } else {
+        otpErrorMsg = data.message || 'Invalid OTP. Please try again.';
+        otpVerified = false;
+      }
+    } catch (err) {
+      otpErrorMsg = 'Network error. Please try again.';
+      otpVerified = false;
+    }
+  }
+
   let showCourseDropdown = false;
   let showYearDropdown = false;
   let showGenderDropdown = false;
+
+  function handleWindowClick(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (!target.closest('[data-dropdown="course"]')) showCourseDropdown = false;
+    if (!target.closest('[data-dropdown="year"]')) showYearDropdown = false;
+    if (!target.closest('[data-dropdown="gender"]')) showGenderDropdown = false;
+  }
 
   let courseOptions = [
     { value: "BSBA-MM", label: "BSBA - Marketing Management" },
@@ -254,74 +370,6 @@
 
   let showPassword = false;
   let showConfirmPassword = false;
-  let otpSent = false;
-  let otpSuccessMsg = '';
-  let otpErrorMsg = '';
-  let otpResendTimer = 0;
-  let otpResendInterval: any = null;
-  let otpVerified = false;
-
-  function startOtpResendTimer() {
-    otpResendTimer = 60;
-    if (otpResendInterval) clearInterval(otpResendInterval);
-    otpResendInterval = setInterval(() => {
-      otpResendTimer--;
-      if (otpResendTimer <= 0) clearInterval(otpResendInterval);
-    }, 1000);
-  }
-
-  async function handleSendOtp() {
-    otpErrorMsg = '';
-    otpSuccessMsg = '';
-    if (!formData.email || errors.email) {
-      otpErrorMsg = 'Enter a valid email first.';
-      return;
-    }
-    try {
-      const res = await fetch('/api/register/send_otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email })
-      });
-      const data = await res.json();
-      if (data.success) {
-        otpSent = true;
-        otpSuccessMsg = `OTP sent to ${data.maskedEmail || formData.email}`;
-        startOtpResendTimer();
-      } else {
-        otpErrorMsg = data.message || 'Failed to send OTP';
-      }
-    } catch (err) {
-      otpErrorMsg = 'Network error. Please try again.';
-    }
-  }
-
-  async function handleVerifyOtp() {
-    otpErrorMsg = '';
-    otpSuccessMsg = '';
-    if (!formData.otp || formData.otp.length !== 6) {
-      otpErrorMsg = 'Please enter a valid 6-digit OTP.';
-      return;
-    }
-    try {
-      const res = await fetch('/api/register/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email, otp: formData.otp })
-      });
-      const data = await res.json();
-      if (data.success) {
-        otpSuccessMsg = 'OTP verified successfully!';
-        otpVerified = true;
-      } else {
-        otpErrorMsg = data.message || 'Invalid OTP. Please try again.';
-        otpVerified = false;
-      }
-    } catch (err) {
-      otpErrorMsg = 'Network error. Please try again.';
-      otpVerified = false;
-    }
-  }
 
   const stepLabels = ['Basic Info', 'Account', 'Academic'];
 </script>
@@ -330,61 +378,79 @@
   <title>Register | e-Kalibro Client Portal</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gradient-to-br from-[#FFF9E6] via-white to-slate-50 flex">
+<style>
+  .login-background {
+    background: url('/assets/login_bg.png') no-repeat center center fixed;
+    background-size: cover;
+    opacity: 0.4;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+  }
+</style>
+
+<svelte:window on:click={handleWindowClick} />
+
+<!--
+  FIX: Two changes from the original:
+  1. Added `relative` so the absolutely-positioned .login-background anchors to this container.
+  2. Removed `bg-gradient-to-br from-[#FFF9E6] via-white to-slate-50` which was covering the background image.
+-->
+<div class="relative min-h-screen flex">
+  <div class="login-background"></div>
+
   <!-- Left Panel - Branding -->
   <div class="hidden lg:flex lg:w-2/5 bg-gradient-to-br from-[#0D5C29] to-[#0a4620] text-white flex-col justify-center p-12 relative overflow-hidden lg:sticky lg:top-0 lg:h-screen">
-    <!-- Decorative blobs -->
     <div class="absolute top-0 right-0 w-64 h-64 bg-[#E8B923] opacity-5 rounded-full blur-3xl transform translate-x-32 -translate-y-32"></div>
     <div class="absolute bottom-0 left-0 w-48 h-48 bg-[#E8B923] opacity-5 rounded-full blur-3xl transform -translate-x-24 translate-y-24"></div>
 
     <div class="max-w-lg relative z-10">
-      <!-- Logo & Brand -->
       <div class="mb-10">
         <div class="flex flex-col items-center mb-6">
           <img src="/assets/logo.png" alt="e-Kalibro Logo" class="h-20 w-20 object-contain mb-3 filter drop-shadow-lg" />
           <div class="text-center">
             <h1 class="text-2xl lg:text-3xl font-bold text-white">e-Kalibro Client Portal</h1>
             <p class="text-slate-100 text-sm mt-2">Library Management System</p>
-            <p class="text-slate-200 text-xs mt-1">Metro Dagupan Colleges</p>
+            <p class="text-slate-200 text-xs mt-1">Metro-Dagupan Colleges, Inc.</p>
           </div>
         </div>
-        <h2 class="text-2xl font-semibold mb-2 leading-tight">Create Your Library Account</h2>
-        <p class="text-slate-100 text-sm leading-relaxed">Register to borrow books, manage your profile, and access all library resources.</p>
       </div>
 
-      <!-- Features -->
       <div class="space-y-6">
-        <div class="flex items-start space-x-3">
-          <div class="flex-shrink-0 w-10 h-10 bg-[#E8B923]/20 rounded-lg flex items-center justify-center mt-0.5">
-            <svg class="h-5 w-5 text-[#E8B923]" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+        <div class="flex items-center space-x-4">
+          <div class="bg-[#E8B923] p-3 rounded-full">
+            <svg class="h-6 w-6 text-[#0D5C29]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
           </div>
-          <div>
-            <h3 class="font-semibold mb-1">Guided 3-Step Registration</h3>
-            <p class="text-slate-200 text-sm">Simple process for both students and faculty</p>
+          <div class="text-left">
+            <h3 class="font-semibold">Guided 3-Step Registration</h3>
+            <p class="text-sm text-slate-300">Simple process for both students and faculty</p>
           </div>
         </div>
-        <div class="flex items-start space-x-3">
-          <div class="flex-shrink-0 w-10 h-10 bg-[#E8B923]/20 rounded-lg flex items-center justify-center mt-0.5">
-            <svg class="h-5 w-5 text-[#E8B923]" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+        <div class="flex items-center space-x-4">
+          <div class="bg-[#E8B923] p-3 rounded-full">
+            <svg class="h-6 w-6 text-[#0D5C29]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
             </svg>
           </div>
-          <div>
-            <h3 class="font-semibold mb-1">Secure & Private</h3>
-            <p class="text-slate-200 text-sm">Your information is kept secure and private.</p>
+          <div class="text-left">
+            <h3 class="font-semibold">Secure & Private</h3>
+            <p class="text-sm text-slate-300">Your information is kept secure and private.</p>
           </div>
         </div>
-        <div class="flex items-start space-x-3">
-          <div class="flex-shrink-0 w-10 h-10 bg-[#E8B923]/20 rounded-lg flex items-center justify-center mt-0.5">
-            <svg class="h-5 w-5 text-[#E8B923]" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+        <div class="flex items-center space-x-4">
+          <div class="bg-[#E8B923] p-3 rounded-full">
+            <svg class="h-6 w-6 text-[#0D5C29]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
           </div>
-          <div>
-            <h3 class="font-semibold mb-1">Need Help?</h3>
-            <p class="text-slate-200 text-sm">Contact <strong>library@school.edu</strong> or call (02) 8XXX-XXXX</p>
+          <div class="text-left">
+            <h3 class="font-semibold">Need Help?</h3>
+            <p class="text-sm text-slate-300">Contact <strong>library@school.edu</strong> or call (02) 8XXX-XXXX</p>
           </div>
         </div>
       </div>
@@ -392,8 +458,8 @@
   </div>
 
   <!-- Right Panel - Form -->
-  <div class="flex-1 flex items-start justify-center p-6 lg:p-12 overflow-y-auto">
-    <div class="w-full max-w-lg py-4">
+  <div class="flex-1 flex items-start justify-center pl-4 lg:pl-8 pr-6 lg:pr-12 pt-6 lg:pt-12 pb-6 lg:pb-12 overflow-y-auto">
+    <div class="w-full max-w-2xl py-4">
 
       <!-- Mobile Header -->
       <div class="lg:hidden text-center mb-8">
@@ -401,14 +467,13 @@
           <img src="/assets/logo.png" alt="e-Kalibro Logo" class="h-16 w-16 object-contain mb-2" />
           <h1 class="text-2xl font-bold text-[#0D5C29]">e-Kalibro Portal</h1>
         </div>
-        <p class="text-slate-500 text-sm">Library Management System</p>
-        <p class="text-slate-400 text-xs mt-1">Metro Dagupan Colleges</p>
+        <p class="text-slate-800 text-sm font-semibold">Library Management System</p>
+        <p class="text-slate-700 text-xs mt-1 font-medium">Metro-Dagupan Colleges, Inc.</p>
       </div>
 
-      <!-- Page Header -->
       <div class="mb-8">
         <h2 class="text-3xl font-bold text-[#0D5C29] mb-2">Create Account</h2>
-        <p class="text-slate-600">Fill in your details to get started</p>
+        <p class="text-slate-900 font-semibold">Fill in your details to get started</p>
       </div>
 
       <!-- Step Indicator -->
@@ -422,7 +487,7 @@
                     ? 'bg-[#0D5C29] border-[#0D5C29] text-white'
                     : currentStep === i + 1
                       ? 'bg-[#0D5C29] border-[#0D5C29] text-white shadow-lg shadow-[#0D5C29]/30'
-                      : 'bg-white border-slate-300 text-slate-400'}">
+                      : 'bg-white border-slate-400 text-slate-700'}">
                   {#if currentStep > i + 1}
                     <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
@@ -431,8 +496,8 @@
                     {i + 1}
                   {/if}
                 </div>
-                <span class="text-xs mt-1.5 font-medium hidden sm:block
-                  {currentStep === i + 1 ? 'text-[#0D5C29]' : currentStep > i + 1 ? 'text-[#0D5C29]' : 'text-slate-400'}">
+                <span class="text-xs mt-1.5 font-semibold hidden sm:block
+                  {currentStep === i + 1 ? 'text-[#0D5C29]' : currentStep > i + 1 ? 'text-[#0D5C29]' : 'text-slate-700'}">
                   {label}
                 </span>
               </div>
@@ -443,138 +508,96 @@
             </div>
           {/each}
         </div>
-        <!-- Progress bar -->
         <div class="w-full bg-slate-200 rounded-full h-1.5 mt-2">
           <div class="bg-gradient-to-r from-[#0D5C29] to-[#16a34a] h-1.5 rounded-full transition-all duration-500 ease-out" style="width: {progressPercentage}%"></div>
         </div>
       </div>
 
       <!-- Form Card -->
-      <form on:submit={handleSubmit} class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <form on:submit={handleSubmit} class="bg-white rounded-2xl shadow-sm border border-slate-200">
         <div class="p-6 sm:p-8">
 
-          <!-- ===== STEP 1: Basic Information ===== -->
+          <!-- STEP 1 -->
           {#if currentStep === 1}
             <div class="space-y-5">
               <div class="mb-6">
                 <h3 class="text-lg font-bold text-slate-800 mb-1">Basic Information</h3>
-                <p class="text-sm text-slate-500">Let's start with your personal details</p>
+                <p class="text-sm text-slate-600 font-medium">Let's start with your personal details</p>
               </div>
 
-              <!-- Full Name -->
               <div>
-                <label for="name" class="block text-sm font-semibold text-slate-700 mb-2">
-                  Full Name <span class="text-red-500">*</span>
-                </label>
+                <label for="name" class="block text-sm font-semibold text-slate-700 mb-2">Full Name <span class="text-red-500">*</span></label>
                 <div class="relative">
                   <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                    </svg>
+                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                   </div>
-                  <input
-                    id="name" type="text"
-                    bind:value={formData.name}
-                    on:input={() => clearError('name')}
+                  <input id="name" type="text" bind:value={formData.name} on:input={() => clearError('name')}
                     class="w-full pl-10 pr-3.5 py-3 border-2 {errors.name ? 'border-red-400' : 'border-slate-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all placeholder-slate-400 shadow-sm"
-                    placeholder="Enter your full name"
-                  />
+                    placeholder="Enter your full name" />
                 </div>
                 {#if errors.name}<p class="mt-1.5 text-xs text-red-600">{errors.name}</p>{/if}
               </div>
 
-              <!-- Email -->
               <div>
-                <label for="email" class="block text-sm font-semibold text-slate-700 mb-2">
-                  Email Address <span class="text-red-500">*</span>
-                </label>
+                <label for="email" class="block text-sm font-semibold text-slate-700 mb-2">Email Address <span class="text-red-500">*</span></label>
                 <div class="relative">
                   <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                    </svg>
+                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                   </div>
-                  <input
-                    id="email" type="email"
-                    bind:value={formData.email}
-                    on:input={() => clearError('email')}
+                  <input id="email" type="email" bind:value={formData.email} on:input={handleEmailInput}
                     class="w-full pl-10 pr-3.5 py-3 border-2 {errors.email ? 'border-red-400' : 'border-slate-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all placeholder-slate-400 shadow-sm"
-                    placeholder="your.email@example.com"
-                  />
+                    placeholder="your.email@example.com" />
                 </div>
-                {#if errors.email}<p class="mt-1.5 text-xs text-red-600">{errors.email}</p>{/if}
+                {#if errors.email}
+                  <p class="mt-1.5 text-xs text-red-600">{errors.email}</p>
+                {:else}
+                  <p class="mt-1.5 text-xs text-slate-600 font-medium">You'll verify this email with an OTP in the next step.</p>
+                {/if}
               </div>
 
-              <!-- Phone & Age -->
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
-                  <label for="phone" class="block text-sm font-semibold text-slate-700 mb-2">
-                    Phone Number <span class="text-red-500">*</span>
-                  </label>
+                  <label for="phone" class="block text-sm font-semibold text-slate-700 mb-2">Phone Number <span class="text-red-500">*</span></label>
                   <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                      <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
-                      </svg>
+                      <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
                     </div>
-                    <input
-                      id="phone" type="tel"
-                      bind:value={formData.phone}
-                      on:input={() => clearError('phone')}
+                    <input id="phone" type="tel" bind:value={formData.phone} on:input={() => clearError('phone')}
                       class="w-full pl-10 pr-3.5 py-3 border-2 {errors.phone ? 'border-red-400' : 'border-slate-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all placeholder-slate-400 shadow-sm"
-                      placeholder="+63 9XX XXX XXXX"
-                    />
+                      placeholder="+63 9XX XXX XXXX" />
                   </div>
                   {#if errors.phone}<p class="mt-1.5 text-xs text-red-600">{errors.phone}</p>{/if}
                 </div>
-
                 <div>
-                  <label for="age" class="block text-sm font-semibold text-slate-700 mb-2">Age <span class="text-slate-400 font-normal">(Optional)</span></label>
+                  <label for="age" class="block text-sm font-semibold text-slate-700 mb-2">Age <span class="text-slate-600 font-normal">(Optional)</span></label>
                   <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                      <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                      </svg>
+                      <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                     </div>
-                    <input
-                      id="age" type="number" min="16" max="100"
-                      bind:value={formData.age}
-                      on:input={() => clearError('age')}
+                    <input id="age" type="number" min="16" max="100" bind:value={formData.age} on:input={() => clearError('age')}
                       class="w-full pl-10 pr-3.5 py-3 border-2 {errors.age ? 'border-red-400' : 'border-slate-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all placeholder-slate-400 shadow-sm"
-                      placeholder="25"
-                    />
+                      placeholder="25" />
                   </div>
                   {#if errors.age}<p class="mt-1.5 text-xs text-red-600">{errors.age}</p>{/if}
                 </div>
               </div>
 
-              <!-- Gender Dropdown -->
               <div>
-                <label id="gender-label" class="block text-sm font-semibold text-slate-700 mb-2">Gender <span class="text-slate-400 font-normal">(Optional)</span></label>
-                <div class="relative">
-                  <button
-                    type="button"
-                    aria-labelledby="gender-label"
-                    aria-haspopup="listbox"
-                    aria-expanded={showGenderDropdown}
+                <label id="gender-label" class="block text-sm font-semibold text-slate-700 mb-2">Gender <span class="text-slate-600 font-normal">(Optional)</span></label>
+                <div class="relative" data-dropdown="gender">
+                  <button type="button" aria-labelledby="gender-label" aria-haspopup="listbox" aria-expanded={showGenderDropdown}
                     class="w-full px-3.5 py-3 border-2 {errors.gender ? 'border-red-400' : 'border-slate-200'} rounded-lg bg-white text-left focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all shadow-sm flex items-center justify-between"
-                    on:click={() => showGenderDropdown = !showGenderDropdown}
-                  >
+                    on:click|stopPropagation={() => { showGenderDropdown = !showGenderDropdown; showCourseDropdown = false; showYearDropdown = false; }}>
                     <span class="{formData.gender ? 'text-slate-800' : 'text-slate-400'} text-sm">{getGenderLabel(formData.gender)}</span>
-                    <svg class="h-4 w-4 text-slate-400 transition-transform {showGenderDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-                    </svg>
+                    <svg class="h-4 w-4 text-slate-400 transition-transform {showGenderDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                   </button>
                   {#if showGenderDropdown}
                     <ul class="absolute z-20 mt-1 w-full bg-white border-2 border-slate-200 rounded-lg shadow-lg overflow-auto max-h-48" role="listbox" aria-labelledby="gender-label">
                       {#each genderOptions as option}
-                        <li
-                          class="px-4 py-2.5 cursor-pointer text-sm hover:bg-[#0D5C29]/5 {formData.gender === option.value ? 'bg-[#0D5C29]/10 text-[#0D5C29] font-semibold' : 'text-slate-700'}"
-                          tabindex="0"
-                          on:click={() => selectGender(option)}
+                        <li class="px-4 py-2.5 cursor-pointer text-sm hover:bg-[#0D5C29]/5 {formData.gender === option.value ? 'bg-[#0D5C29]/10 text-[#0D5C29] font-semibold' : 'text-slate-700'}"
+                          tabindex="0" on:click={() => selectGender(option)}
                           on:keydown={(ev: KeyboardEvent) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); selectGender(option); } }}
-                          role="option" aria-selected={formData.gender === option.value}
-                        >{option.label}</li>
+                          role="option" aria-selected={formData.gender === option.value}>{option.label}</li>
                       {/each}
                     </ul>
                   {/if}
@@ -583,20 +606,18 @@
             </div>
           {/if}
 
-          <!-- ===== STEP 2: Account Information ===== -->
+          <!-- STEP 2 -->
           {#if currentStep === 2}
             <div class="space-y-5">
               <div class="mb-6">
                 <h3 class="text-lg font-bold text-slate-800 mb-1">Account Information</h3>
-                <p class="text-sm text-slate-500">Set up your login credentials</p>
+                <p class="text-sm text-slate-600 font-medium">Set up your login credentials</p>
               </div>
 
-              <!-- Role Selection -->
               <div>
                 <label id="role-label" class="block text-sm font-semibold text-slate-700 mb-3">I am a <span class="text-red-500">*</span></label>
                 <div class="grid grid-cols-2 gap-3" role="radiogroup" aria-labelledby="role-label">
-                  <label class="relative flex items-center justify-center p-4 border-2 rounded-xl cursor-pointer transition-all
-                    {formData.role === 'student' ? 'border-[#0D5C29] bg-[#0D5C29]/5 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}">
+                  <label class="relative flex items-center justify-center p-4 border-2 rounded-xl cursor-pointer transition-all {formData.role === 'student' ? 'border-[#0D5C29] bg-[#0D5C29]/5 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}">
                     <input type="radio" bind:group={formData.role} value="student" class="sr-only" />
                     <div class="text-center">
                       <svg class="h-8 w-8 mx-auto mb-2 {formData.role === 'student' ? 'text-[#0D5C29]' : 'text-slate-400'}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -606,8 +627,7 @@
                       <span class="text-sm font-semibold {formData.role === 'student' ? 'text-[#0D5C29]' : 'text-slate-700'}">Student</span>
                     </div>
                   </label>
-                  <label class="relative flex items-center justify-center p-4 border-2 rounded-xl cursor-pointer transition-all
-                    {formData.role === 'faculty' ? 'border-[#0D5C29] bg-[#0D5C29]/5 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}">
+                  <label class="relative flex items-center justify-center p-4 border-2 rounded-xl cursor-pointer transition-all {formData.role === 'faculty' ? 'border-[#0D5C29] bg-[#0D5C29]/5 shadow-sm' : 'border-slate-200 hover:border-slate-300 bg-white'}">
                     <input type="radio" bind:group={formData.role} value="faculty" class="sr-only" />
                     <div class="text-center">
                       <svg class="h-8 w-8 mx-auto mb-2 {formData.role === 'faculty' ? 'text-[#0D5C29]' : 'text-slate-400'}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -619,46 +639,32 @@
                 </div>
               </div>
 
-              <!-- Username -->
               <div>
                 <label for="username" class="block text-sm font-semibold text-slate-700 mb-2">Username <span class="text-red-500">*</span></label>
                 <div class="relative">
                   <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                    </svg>
+                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                   </div>
-                  <input
-                    id="username" type="text"
-                    bind:value={formData.username}
-                    on:input={() => clearError('username')}
+                  <input id="username" type="text" bind:value={formData.username} on:input={() => clearError('username')}
                     class="w-full pl-10 pr-3.5 py-3 border-2 {errors.username ? 'border-red-400' : 'border-slate-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all placeholder-slate-400 shadow-sm"
-                    placeholder="Choose a unique username"
-                  />
+                    placeholder="Choose a unique username" />
                 </div>
                 {#if errors.username}
                   <p class="mt-1.5 text-xs text-red-600">{errors.username}</p>
                 {:else}
-                  <p class="mt-1.5 text-xs text-slate-500">At least 3 characters — letters, numbers, underscores only</p>
+                  <p class="mt-1.5 text-xs text-slate-600 font-medium">At least 3 characters — letters, numbers, underscores only</p>
                 {/if}
               </div>
 
-              <!-- Password -->
               <div>
                 <label for="password" class="block text-sm font-semibold text-slate-700 mb-2">Password <span class="text-red-500">*</span></label>
                 <div class="relative">
                   <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                    </svg>
+                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                   </div>
-                  <input
-                    id="password" type={showPassword ? "text" : "password"}
-                    bind:value={formData.password}
-                    on:input={() => clearError('password')}
+                  <input id="password" type={showPassword ? "text" : "password"} bind:value={formData.password} on:input={() => clearError('password')}
                     class="w-full pl-10 pr-11 py-3 border-2 {errors.password ? 'border-red-400' : 'border-slate-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all placeholder-slate-400 shadow-sm"
-                    placeholder="Create a strong password"
-                  />
+                    placeholder="Create a strong password" />
                   <button type="button" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-[#0D5C29] transition-colors" on:click={() => showPassword = !showPassword}>
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       {#if showPassword}
@@ -674,37 +680,24 @@
                   <div class="mt-2 flex items-center gap-2">
                     <div class="flex gap-1">
                       {#each [1,2,3] as bar}
-                        <div class="h-1.5 w-8 rounded-full transition-all
-                          {passwordStrength.score >= bar
-                            ? passwordStrength.score === 1 ? 'bg-red-500' : passwordStrength.score === 2 ? 'bg-amber-500' : 'bg-[#0D5C29]'
-                            : 'bg-slate-200'}"></div>
+                        <div class="h-1.5 w-8 rounded-full transition-all {passwordStrength.score >= bar ? passwordStrength.score === 1 ? 'bg-red-500' : passwordStrength.score === 2 ? 'bg-amber-500' : 'bg-[#0D5C29]' : 'bg-slate-200'}"></div>
                       {/each}
                     </div>
-                    <span class="text-xs font-medium
-                      {passwordStrength.score === 1 ? 'text-red-600' : passwordStrength.score === 2 ? 'text-amber-600' : 'text-[#0D5C29]'}">
-                      {passwordStrength.label}
-                    </span>
+                    <span class="text-xs font-medium {passwordStrength.score === 1 ? 'text-red-600' : passwordStrength.score === 2 ? 'text-amber-600' : 'text-[#0D5C29]'}">{passwordStrength.label}</span>
                   </div>
                 {/if}
                 {#if errors.password}<p class="mt-1.5 text-xs text-red-600">{errors.password}</p>{/if}
               </div>
 
-              <!-- Confirm Password -->
               <div>
                 <label for="confirmPassword" class="block text-sm font-semibold text-slate-700 mb-2">Confirm Password <span class="text-red-500">*</span></label>
                 <div class="relative">
                   <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                   </div>
-                  <input
-                    id="confirmPassword" type={showConfirmPassword ? "text" : "password"}
-                    bind:value={formData.confirmPassword}
-                    on:input={() => clearError('confirmPassword')}
+                  <input id="confirmPassword" type={showConfirmPassword ? "text" : "password"} bind:value={formData.confirmPassword} on:input={() => clearError('confirmPassword')}
                     class="w-full pl-10 pr-11 py-3 border-2 {errors.confirmPassword ? 'border-red-400' : 'border-slate-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all placeholder-slate-400 shadow-sm"
-                    placeholder="Confirm your password"
-                  />
+                    placeholder="Confirm your password" />
                   <button type="button" class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-[#0D5C29] transition-colors" on:click={() => showConfirmPassword = !showConfirmPassword}>
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                       {#if showConfirmPassword}
@@ -721,13 +714,10 @@
 
               <!-- OTP Section -->
               <div>
-                <label for="otp" class="block text-sm font-semibold text-slate-700 mb-2">
-                  Email Verification (OTP) <span class="text-red-500">*</span>
-                </label>
+                <label for="otp" class="block text-sm font-semibold text-slate-700 mb-2">Email Verification (OTP) <span class="text-red-500">*</span></label>
                 <div class="flex flex-col sm:flex-row gap-2">
-                  <input
-                    id="otp" type="text" maxlength="6" inputmode="numeric" pattern="[0-9]*"
-                    bind:value={formData.otp}
+                  <input id="otp" type="text" maxlength="6" inputmode="numeric" pattern="[0-9]*"
+                    bind:value={formData.otp} disabled={!otpSent}
                     on:input={(e: Event) => {
                       const t = e.target as HTMLInputElement | null;
                       const val = (t?.value ?? '').replace(/\D/g, '').slice(0, 6);
@@ -736,125 +726,87 @@
                       otpErrorMsg = '';
                       otpSuccessMsg = '';
                     }}
-                    class="flex-1 py-3 px-3.5 border-2 {errors.otp ? 'border-red-400' : 'border-slate-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all text-center text-lg tracking-[0.4em] font-mono placeholder-slate-400 shadow-sm"
-                    placeholder="——————"
-                    autocomplete="one-time-code"
-                  />
-                  <button
-                    type="button"
-                    on:click={handleSendOtp}
-                    disabled={!formData.email || !!errors.email || otpResendTimer > 0}
-                    class="px-4 py-3 rounded-lg text-sm font-semibold border-2 transition-all
-                      {otpResendTimer > 0
-                        ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-                        : 'bg-[#E8B923]/10 text-[#8a6c00] border-[#E8B923]/40 hover:bg-[#E8B923]/20'}"
-                  >
+                    class="flex-1 py-3 px-3.5 border-2 {errors.otp ? 'border-red-400' : 'border-slate-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all text-center text-lg tracking-[0.4em] font-mono placeholder-slate-400 shadow-sm disabled:bg-slate-50 disabled:cursor-not-allowed"
+                    placeholder="——————" autocomplete="one-time-code" />
+                  <button type="button" on:click={handleSendOtp} disabled={!formData.email || !!errors.email || otpResendTimer > 0}
+                    class="px-4 py-3 rounded-lg text-sm font-semibold border-2 transition-all whitespace-nowrap {otpResendTimer > 0 ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-[#E8B923]/10 text-[#8a6c00] border-[#E8B923]/40 hover:bg-[#E8B923]/20'}">
                     {otpResendTimer > 0 ? `Resend (${otpResendTimer}s)` : otpSent ? 'Resend OTP' : 'Send OTP'}
                   </button>
-                  <button
-                    type="button"
-                    on:click={handleVerifyOtp}
-                    disabled={!formData.otp || formData.otp.length !== 6}
-                    class="px-4 py-3 rounded-lg text-sm font-semibold border-2 transition-all
-                      {(!formData.otp || formData.otp.length !== 6)
-                        ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-                        : 'bg-[#0D5C29]/10 text-[#0D5C29] border-[#0D5C29]/30 hover:bg-[#0D5C29]/20'}"
-                  >
+                  <button type="button" on:click={handleVerifyOtp} disabled={!formData.otp || formData.otp.length !== 6}
+                    class="px-4 py-3 rounded-lg text-sm font-semibold border-2 transition-all whitespace-nowrap {(!formData.otp || formData.otp.length !== 6) ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-[#0D5C29]/10 text-[#0D5C29] border-[#0D5C29]/30 hover:bg-[#0D5C29]/20'}">
                     {otpVerified ? '✓ Verified' : 'Verify'}
                   </button>
                 </div>
                 {#if errors.otp}<p class="mt-1.5 text-xs text-red-600">{errors.otp}</p>{/if}
                 {#if otpSuccessMsg}
                   <div class="mt-2 flex items-center text-[#0D5C29] bg-[#0D5C29]/5 border border-[#0D5C29]/20 rounded-lg px-3 py-2 text-sm">
-                    <svg class="h-4 w-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    <svg class="h-4 w-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     {otpSuccessMsg}
                   </div>
                 {/if}
                 {#if otpErrorMsg}
                   <div class="mt-2 flex items-center text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">
-                    <svg class="h-4 w-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/>
-                    </svg>
+                    <svg class="h-4 w-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
                     {otpErrorMsg}
                   </div>
                 {/if}
-                <p class="mt-1.5 text-xs text-slate-500">Check your email for a 6-digit code. OTP required to proceed.</p>
+                {#if !otpSent && !otpErrorMsg}
+                  <p class="mt-1.5 text-xs text-slate-600 font-medium">Click <strong>Send OTP</strong> to receive a 6-digit code at your email.</p>
+                {:else if otpSent && !otpVerified && !otpErrorMsg && !otpSuccessMsg}
+                  <p class="mt-1.5 text-xs text-slate-600 font-medium">Enter the code sent to your email, then click <strong>Verify</strong>.</p>
+                {:else if !otpVerified}
+                  <p class="mt-1.5 text-xs text-slate-600 font-medium">Check your email for a 6-digit code. OTP required to proceed.</p>
+                {/if}
               </div>
             </div>
           {/if}
 
-          <!-- ===== STEP 3: Academic / Professional ===== -->
+          <!-- STEP 3 -->
           {#if currentStep === 3}
             <div class="space-y-5">
               <div class="mb-6">
-                <h3 class="text-lg font-bold text-slate-800 mb-1">
-                  {formData.role === 'student' ? 'Academic Information' : 'Professional Information'}
-                </h3>
-                <p class="text-sm text-slate-500">
-                  {formData.role === 'student' ? 'Tell us about your studies' : 'Tell us about your position'}
-                </p>
+                <h3 class="text-lg font-bold text-slate-800 mb-1">{formData.role === 'student' ? 'Academic Information' : 'Professional Information'}</h3>
+                <p class="text-sm text-slate-600 font-medium">{formData.role === 'student' ? 'Tell us about your studies' : 'Tell us about your position'}</p>
               </div>
 
               {#if formData.role === 'student'}
-                <!-- Enrollment No -->
                 <div>
-                  <label for="enrollmentNo" class="block text-sm font-semibold text-slate-700 mb-2">
-                    Student ID / Enrollment Number <span class="text-red-500">*</span>
-                  </label>
+                  <label for="enrollmentNo" class="block text-sm font-semibold text-slate-700 mb-2">Student ID / Enrollment Number <span class="text-red-500">*</span></label>
                   <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                      <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V4a2 2 0 114 0v2m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"/>
-                      </svg>
+                      <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V4a2 2 0 114 0v2m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"/></svg>
                     </div>
-                    <input
-                      id="enrollmentNo" type="text"
-                      bind:value={formData.enrollmentNo}
+                    <input id="enrollmentNo" type="text" bind:value={formData.enrollmentNo}
                       on:input={(e: Event) => {
-                          const t = e.target as HTMLInputElement | null;
-                          let value = (t?.value ?? '').replace(/\D/g, '').slice(0, 10);
-                          if (value.length > 4) value = value.slice(0, 4) + '-' + value.slice(4);
-                          formData.enrollmentNo = value;
-                          clearError('enrollmentNo');
-                        }}
+                        const t = e.target as HTMLInputElement | null;
+                        let value = (t?.value ?? '').replace(/\D/g, '').slice(0, 10);
+                        if (value.length > 4) value = value.slice(0, 4) + '-' + value.slice(4);
+                        formData.enrollmentNo = value;
+                        clearError('enrollmentNo');
+                      }}
                       class="w-full pl-10 pr-3.5 py-3 border-2 {errors.enrollmentNo ? 'border-red-400' : 'border-slate-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all placeholder-slate-400 shadow-sm"
-                      placeholder="2024-123456"
-                    />
+                      placeholder="2024-123456" />
                   </div>
                   {#if errors.enrollmentNo}<p class="mt-1.5 text-xs text-red-600">{errors.enrollmentNo}</p>{/if}
                 </div>
 
-                <!-- Course & Year -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <!-- Course -->
                   <div>
                     <label id="course-label" class="block text-sm font-semibold text-slate-700 mb-2">Course <span class="text-red-500">*</span></label>
-                    <div class="relative">
-                      <button
-                        type="button"
-                        aria-labelledby="course-label"
-                        aria-haspopup="listbox"
-                        aria-expanded={showCourseDropdown}
+                    <div class="relative" data-dropdown="course">
+                      <button type="button" aria-labelledby="course-label" aria-haspopup="listbox" aria-expanded={showCourseDropdown}
                         class="w-full px-3.5 py-3 border-2 {errors.course ? 'border-red-400' : 'border-slate-200'} rounded-lg bg-white text-left focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all shadow-sm flex items-center justify-between"
-                        on:click={() => showCourseDropdown = !showCourseDropdown}
-                      >
+                        on:click|stopPropagation={() => { showCourseDropdown = !showCourseDropdown; showYearDropdown = false; showGenderDropdown = false; }}>
                         <span class="text-sm {formData.course ? 'text-slate-800' : 'text-slate-400'} truncate">{getCourseLabel(formData.course)}</span>
-                        <svg class="h-4 w-4 text-slate-400 flex-shrink-0 ml-1 transition-transform {showCourseDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-                        </svg>
+                        <svg class="h-4 w-4 text-slate-400 flex-shrink-0 ml-1 transition-transform {showCourseDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                       </button>
                       {#if showCourseDropdown}
                         <ul class="absolute z-20 mt-1 w-full bg-white border-2 border-slate-200 rounded-lg shadow-lg overflow-auto max-h-52" role="listbox" aria-labelledby="course-label">
                           {#each courseOptions as option}
-                            <li
-                              class="px-4 py-2.5 cursor-pointer text-sm hover:bg-[#0D5C29]/5 {formData.course === option.value ? 'bg-[#0D5C29]/10 text-[#0D5C29] font-semibold' : 'text-slate-700'} truncate"
-                              tabindex="0"
-                              on:click={() => selectCourse(option)} title={option.label}
+                            <li class="px-4 py-2.5 cursor-pointer text-sm hover:bg-[#0D5C29]/5 {formData.course === option.value ? 'bg-[#0D5C29]/10 text-[#0D5C29] font-semibold' : 'text-slate-700'} truncate"
+                              tabindex="0" on:click={() => selectCourse(option)} title={option.label}
                               on:keydown={(ev: KeyboardEvent) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); selectCourse(option); } }}
-                              role="option" aria-selected={formData.course === option.value}
-                            >{truncateLabel(option.label)}</li>
+                              role="option" aria-selected={formData.course === option.value}>{truncateLabel(option.label)}</li>
                           {/each}
                         </ul>
                       {/if}
@@ -862,33 +814,22 @@
                     {#if errors.course}<p class="mt-1.5 text-xs text-red-600">{errors.course}</p>{/if}
                   </div>
 
-                  <!-- Year Level -->
                   <div>
                     <label id="year-label" class="block text-sm font-semibold text-slate-700 mb-2">Year Level <span class="text-red-500">*</span></label>
-                    <div class="relative">
-                      <button
-                        type="button"
-                        aria-labelledby="year-label"
-                        aria-haspopup="listbox"
-                        aria-expanded={showYearDropdown}
+                    <div class="relative" data-dropdown="year">
+                      <button type="button" aria-labelledby="year-label" aria-haspopup="listbox" aria-expanded={showYearDropdown}
                         class="w-full px-3.5 py-3 border-2 {errors.year ? 'border-red-400' : 'border-slate-200'} rounded-lg bg-white text-left focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all shadow-sm flex items-center justify-between"
-                        on:click={() => showYearDropdown = !showYearDropdown}
-                      >
+                        on:click|stopPropagation={() => { showYearDropdown = !showYearDropdown; showCourseDropdown = false; showGenderDropdown = false; }}>
                         <span class="text-sm {formData.year ? 'text-slate-800' : 'text-slate-400'}">{getYearLabel(formData.year)}</span>
-                        <svg class="h-4 w-4 text-slate-400 flex-shrink-0 transition-transform {showYearDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-                        </svg>
+                        <svg class="h-4 w-4 text-slate-400 flex-shrink-0 transition-transform {showYearDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                       </button>
                       {#if showYearDropdown}
                         <ul class="absolute z-20 mt-1 w-full bg-white border-2 border-slate-200 rounded-lg shadow-lg overflow-auto max-h-48" role="listbox" aria-labelledby="year-label">
                           {#each yearOptions as option}
-                            <li
-                              class="px-4 py-2.5 cursor-pointer text-sm hover:bg-[#0D5C29]/5 {formData.year === option.value ? 'bg-[#0D5C29]/10 text-[#0D5C29] font-semibold' : 'text-slate-700'}"
-                              tabindex="0"
-                              on:click={() => selectYear(option)}
+                            <li class="px-4 py-2.5 cursor-pointer text-sm hover:bg-[#0D5C29]/5 {formData.year === option.value ? 'bg-[#0D5C29]/10 text-[#0D5C29] font-semibold' : 'text-slate-700'}"
+                              tabindex="0" on:click={() => selectYear(option)}
                               on:keydown={(ev: KeyboardEvent) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); selectYear(option); } }}
-                              role="option" aria-selected={formData.year === option.value}
-                            >{option.label}</li>
+                              role="option" aria-selected={formData.year === option.value}>{option.label}</li>
                           {/each}
                         </ul>
                       {/if}
@@ -898,47 +839,32 @@
                 </div>
 
               {:else}
-                <!-- Faculty Department -->
                 <div>
                   <label for="department" class="block text-sm font-semibold text-slate-700 mb-2">Department <span class="text-red-500">*</span></label>
-                  <select
-                    id="department"
-                    bind:value={formData.department}
-                    on:change={() => clearError('department')}
-                    class="w-full px-3.5 py-3 border-2 {errors.department ? 'border-red-400' : 'border-slate-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all bg-white text-sm text-slate-800 shadow-sm"
-                  >
+                  <select id="department" bind:value={formData.department} on:change={() => clearError('department')}
+                    class="w-full px-3.5 py-3 border-2 {errors.department ? 'border-red-400' : 'border-slate-200'} rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all bg-white text-sm text-slate-800 shadow-sm">
                     <option value="">Select your department</option>
                     {#each departments as dept}<option value={dept}>{dept}</option>{/each}
                   </select>
                   {#if errors.department}<p class="mt-1.5 text-xs text-red-600">{errors.department}</p>{/if}
                 </div>
-
-                <!-- Faculty Number -->
                 <div>
-                  <label for="facultyNumber" class="block text-sm font-semibold text-slate-700 mb-2">Faculty Number <span class="text-slate-400 font-normal">(Optional)</span></label>
+                  <label for="facultyNumber" class="block text-sm font-semibold text-slate-700 mb-2">Faculty Number <span class="text-slate-600 font-normal">(Optional)</span></label>
                   <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                      <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m8 0H8"/>
-                      </svg>
+                      <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m8 0H8"/></svg>
                     </div>
-                    <input
-                      id="facultyNumber" type="text"
-                      bind:value={formData.facultyNumber}
+                    <input id="facultyNumber" type="text" bind:value={formData.facultyNumber}
                       class="w-full pl-10 pr-3.5 py-3 border-2 border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all placeholder-slate-400 shadow-sm"
-                      placeholder="e.g., 12345"
-                    />
+                      placeholder="e.g., 12345" />
                   </div>
                 </div>
               {/if}
 
-              <!-- Privacy Notice -->
               <div class="pt-2 space-y-3">
                 <div class="bg-[#0D5C29]/5 border border-[#0D5C29]/15 rounded-xl p-4">
                   <div class="flex items-start gap-3">
-                    <svg class="h-5 w-5 text-[#0D5C29] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                    </svg>
+                    <svg class="h-5 w-5 text-[#0D5C29] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
                     <div class="text-sm text-[#0D5C29]">
                       <p class="font-semibold mb-1">Privacy & Data Collection Notice</p>
                       <p class="text-xs text-[#0D5C29]/80 leading-relaxed">We collect and process your personal information responsibly. Your data will be used solely for library account management and will not be shared with third parties without your consent.</p>
@@ -946,15 +872,10 @@
                   </div>
                 </div>
 
-                <!-- Terms Checkbox -->
-                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <div class="bg-slate-50 rounded-xl p-4 border {errors.terms ? 'border-red-300' : 'border-slate-200'}">
                   <label class="flex items-start gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      bind:checked={agreedToTerms}
-                      on:change={() => clearError('terms')}
-                      class="mt-0.5 h-4 w-4 text-[#0D5C29] focus:ring-[#0D5C29] border-slate-300 rounded cursor-pointer"
-                    />
+                    <input type="checkbox" bind:checked={agreedToTerms} on:change={() => clearError('terms')}
+                      class="mt-0.5 h-4 w-4 text-[#0D5C29] focus:ring-[#0D5C29] border-slate-300 rounded cursor-pointer" />
                     <span class="text-sm text-slate-700 leading-relaxed">
                       I agree to the <a href="/terms" target="_blank" class="text-[#0D5C29] hover:underline font-semibold">Terms of Service</a> and <a href="/privacy" target="_blank" class="text-[#0D5C29] hover:underline font-semibold">Privacy Policy</a>. I understand my account will be reviewed by library staff before activation.
                     </span>
@@ -962,77 +883,52 @@
                   {#if errors.terms}<p class="mt-2 text-xs text-red-600">{errors.terms}</p>{/if}
                 </div>
 
-                <!-- Data Rights -->
                 <div class="bg-[#FFF9E6] border border-[#E8B923]/30 rounded-xl p-4">
                   <div class="flex items-start gap-3">
-                    <svg class="h-5 w-5 text-[#8a6c00] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                    <p class="text-xs text-[#6b5300] leading-relaxed">
-                      <strong>Your Rights:</strong> You have the right to access, correct, or request deletion of your data. Contact the library office for assistance.
-                    </p>
+                    <svg class="h-5 w-5 text-[#8a6c00] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <p class="text-xs text-[#6b5300] leading-relaxed"><strong>Your Rights:</strong> You have the right to access, correct, or request deletion of your data. Contact the library office for assistance.</p>
                   </div>
                 </div>
               </div>
             </div>
           {/if}
 
-          <!-- Success / Error banners -->
           {#if submitSuccess}
             <div class="mt-5 flex items-center gap-3 text-[#0D5C29] bg-[#0D5C29]/5 border border-[#0D5C29]/20 rounded-xl p-4">
-              <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
+              <svg class="h-5 w-5 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
               <p class="text-sm font-medium">{submitSuccess}</p>
             </div>
           {/if}
           {#if submitError}
             <div class="mt-5 flex items-center gap-3 text-red-700 bg-red-50 border-l-4 border-red-500 rounded-r-xl p-4">
-              <svg class="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-              </svg>
+              <svg class="h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
               <p class="text-sm">{submitError}</p>
             </div>
           {/if}
         </div>
 
         <!-- Footer Actions -->
-        <div class="px-6 sm:px-8 py-4 bg-slate-50 border-t border-slate-200 rounded-b-2xl">
+        <div class="px-6 sm:px-8 py-4 bg-slate-50 border-t border-slate-200 rounded-b-2xl overflow-hidden">
           <div class="flex items-center justify-between">
             <div>
               {#if currentStep > 1}
-                <button
-                  type="button"
-                  on:click={prevStep}
-                  disabled={isSubmitting}
-                  class="inline-flex items-center px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border-2 border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
-                >
-                  <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
-                  </svg>
+                <button type="button" on:click={prevStep} disabled={isSubmitting}
+                  class="inline-flex items-center px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border-2 border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50">
+                  <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
                   Previous
                 </button>
               {/if}
             </div>
             <div>
               {#if currentStep < totalSteps}
-                <button
-                  type="button"
-                  on:click={nextStep}
-                  disabled={isSubmitting || (currentStep === 2 && !otpVerified)}
-                  class="inline-flex items-center px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-[#0D5C29] to-[#0a4620] rounded-lg hover:shadow-lg hover:shadow-[#0D5C29]/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
+                <button type="button" on:click={nextStep} disabled={isSubmitting}
+                  class="inline-flex items-center px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-[#0D5C29] to-[#0a4620] rounded-lg hover:shadow-lg hover:shadow-[#0D5C29]/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                   Continue
-                  <svg class="h-4 w-4 ml-2" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
-                  </svg>
+                  <svg class="h-4 w-4 ml-2" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                 </button>
               {:else}
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  class="inline-flex items-center px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-[#0D5C29] to-[#0a4620] rounded-lg hover:shadow-lg hover:shadow-[#0D5C29]/25 transition-all disabled:opacity-75"
-                >
+                <button type="submit" disabled={isSubmitting}
+                  class="inline-flex items-center px-6 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-[#0D5C29] to-[#0a4620] rounded-lg hover:shadow-lg hover:shadow-[#0D5C29]/25 transition-all disabled:opacity-75">
                   {#if isSubmitting}
                     <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -1040,9 +936,7 @@
                     </svg>
                     Creating Account...
                   {:else}
-                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
-                    </svg>
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
                     Create Account
                   {/if}
                 </button>
@@ -1052,15 +946,14 @@
         </div>
       </form>
 
-      <!-- Bottom Link -->
       <div class="mt-6 text-center">
-        <p class="text-sm text-slate-600">
+        <p class="text-sm text-slate-900 font-semibold">
           Already have an account?
-          <a href="/" class="ml-1 font-semibold text-[#0D5C29] hover:text-[#0a4620] transition-colors">Sign in here</a>
+          <a href="/" class="ml-1 font-bold text-[#0D5C29] hover:text-[#0a4620] transition-colors">Sign in here</a>
         </p>
-        <div class="mt-4 text-xs text-slate-400 space-y-1">
+        <div class="mt-4 text-xs text-slate-800 font-medium space-y-1">
           <p>Protected by our privacy practices.</p>
-          <p>© 2026 Metro Dagupan Colleges Library. All rights reserved.</p>
+          <p>© 2026 Metro-Dagupan Colleges, Inc. Library. All rights reserved.</p>
         </div>
       </div>
     </div>
