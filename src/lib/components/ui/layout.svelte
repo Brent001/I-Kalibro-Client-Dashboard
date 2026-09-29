@@ -21,7 +21,8 @@
     Search,
     Sparkles,
     UserCircle,
-    X
+    X,
+    AlertTriangle
   } from '@lucide/svelte';
 
   export let onLogout: () => void = () => {};
@@ -40,6 +41,7 @@
     email?: string;
     userType?: string;
     isActive?: boolean;
+    restrictions?: Restriction[];
   } | null>(null);
   
   const isLoadingStore = writable(true);
@@ -52,7 +54,16 @@
     email?: string;
     userType?: string;
     isActive?: boolean;
+    restrictions?: Restriction[];
   } | null;
+
+  type Restriction = {
+    id: number;
+    restrictionType: string;
+    reason: string | null;
+    startDate: string;
+    endDate: string | null;
+  };
 
   let user: UserType = null;
   let isLoadingUser = true;
@@ -290,6 +301,20 @@
   function capitalize(str: string | undefined) {
     if (!str) return "";
     return str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  }
+
+  function restrictionLabel(type: string) {
+    const labels: Record<string, string> = {
+      ban_reservation: 'Reservation restriction',
+      ban_borrowing: 'Borrowing restriction',
+      temporary_suspension: 'Temporary account suspension'
+    };
+    return labels[type] || capitalize(type);
+  }
+
+  function formatRestrictionDate(value: string | null) {
+    if (!value) return 'No end date';
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value));
   }
 
   function getUserInitials(displayName: string): string {
@@ -566,6 +591,25 @@
     <!-- Page content -->
     <main class="flex-1 overflow-y-auto bg-gradient-to-br from-[#F5F5DC] via-[#FDFBF3] to-[#FFF9E6] p-2 sm:p-3">
       <div class="max-w-7xl mx-auto w-full">
+        {#if user?.restrictions?.length}
+          <section class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-amber-950 shadow-sm" aria-label="Active account restrictions">
+            <div class="flex items-start gap-2.5">
+              <AlertTriangle class="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
+              <div class="min-w-0 flex-1">
+                <h2 class="text-sm font-semibold">Active account restriction{user.restrictions.length === 1 ? '' : 's'}</h2>
+                <div class="mt-1.5 grid gap-2 sm:grid-cols-2">
+                  {#each user.restrictions as restriction (restriction.id)}
+                    <div class="text-xs leading-relaxed">
+                      <p class="font-medium">{restrictionLabel(restriction.restrictionType)}</p>
+                      {#if restriction.reason}<p class="text-amber-900/80">{restriction.reason}</p>{/if}
+                      <p class="text-amber-900/70">From {formatRestrictionDate(restriction.startDate)} · {formatRestrictionDate(restriction.endDate)}</p>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            </div>
+          </section>
+        {/if}
         <slot />
       </div>
     </main>

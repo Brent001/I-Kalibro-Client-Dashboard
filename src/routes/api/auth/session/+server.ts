@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { db } from '$lib/server/db/index.js';
 import { tbl_user, tbl_student, tbl_faculty } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
+import { getActiveUserRestrictions } from '$lib/server/utils/userRestrictions.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
@@ -112,6 +113,8 @@ export const GET: RequestHandler = async ({ request, getClientAddress, cookies }
             );
         }
 
+        const restrictions = await getActiveUserRestrictions(userRow.id);
+
         let userType = userRow.userType;
         if (!['student', 'faculty'].includes(userType.toLowerCase())) {
             const [studentProfile] = await db
@@ -139,7 +142,8 @@ export const GET: RequestHandler = async ({ request, getClientAddress, cookies }
                     username: userRow.username,
                     email: userRow.email,
                     userType,
-                    isActive: userRow.isActive
+                    isActive: userRow.isActive,
+                    restrictions
                 },
                 sessionInfo: {
                     authenticatedAt: new Date().toISOString(),

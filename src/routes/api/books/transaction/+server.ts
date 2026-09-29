@@ -23,6 +23,7 @@ import {
 } from '$lib/server/db/schema/schema.js';
 import { eq, and, or } from 'drizzle-orm';
 import { authenticateClientRequest } from '$lib/server/utils/clientAuth.js';
+import { assertUserCanReserve } from '$lib/server/utils/userRestrictions.js';
 import { logUserActivity } from '$lib/server/db/activity.js';
 
 // Helper: Calculate due date (14 days from today)
@@ -51,6 +52,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     // accept either `itemId` (preferred) or legacy `bookId`
     const authenticatedUser = await authenticateClientRequest(request, cookies.get('client_token'));
     if (!authenticatedUser) return error(401, { message: 'Unauthorized' });
+    await assertUserCanReserve(authenticatedUser.id);
 
     const { bookId, itemId, userId, requestType, itemType = 'book' } = requestBody;
     const idRaw = itemId ?? bookId;

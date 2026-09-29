@@ -30,9 +30,9 @@
   const totalSteps = 3;
 
   const departments = [
-    'Computer Science', 'Information Technology', 'Business',
-    'Engineering', 'Medicine', 'Education', 'Arts & Sciences',
-    'Library Services', 'Administration'
+    'College of Business Administration, Tourism, and Computer Science (CBAT.COM)',
+    'College of Teacher Education (COTE)',
+    'College of Criminology (CoCrim)'
   ];
 
   let otpSent = false;
@@ -134,6 +134,7 @@
       showCourseDropdown = false;
       showYearDropdown = false;
       showGenderDropdown = false;
+      showDepartmentDropdown = false;
     }
   }
 
@@ -141,6 +142,7 @@
     showCourseDropdown = false;
     showYearDropdown = false;
     showGenderDropdown = false;
+    showDepartmentDropdown = false;
     currentStep = Math.max(currentStep - 1, 1);
   }
 
@@ -277,28 +279,30 @@
   let showCourseDropdown = false;
   let showYearDropdown = false;
   let showGenderDropdown = false;
+  let showDepartmentDropdown = false;
 
   function handleWindowClick(e: MouseEvent) {
     const target = e.target as HTMLElement;
     if (!target.closest('[data-dropdown="course"]')) showCourseDropdown = false;
     if (!target.closest('[data-dropdown="year"]')) showYearDropdown = false;
     if (!target.closest('[data-dropdown="gender"]')) showGenderDropdown = false;
+    if (!target.closest('[data-dropdown="department"]')) showDepartmentDropdown = false;
   }
 
   let courseOptions = [
+    { value: "BSCS", label: "Bachelor of Science in Computer Science (BSCS)" },
     { value: "BSBA-MM", label: "BSBA - Marketing Management" },
     { value: "BSBA-FM", label: "BSBA - Financial Management" },
-    { value: "BSCS", label: "BS Computer Science" },
-    { value: "BSCrim", label: "BS Criminology" },
-    { value: "BPEd", label: "Bachelor of Physical Education" },
-    { value: "BSEd-Filipino", label: "BSEd - Filipino" },
+    { value: "BSTM", label: "Bachelor of Science in Tourism Management (BSTM)" },
+    { value: "BEEd", label: "Bachelor of Elementary Education (BEEd)" },
     { value: "BSEd-English", label: "BSEd - English" },
+    { value: "BSEd-Filipino", label: "BSEd - Filipino" },
     { value: "BSEd-Math", label: "BSEd - Mathematics" },
-    { value: "BSEd-Science", label: "BSEd - Science and Technology" },
+    { value: "BSEd-Science", label: "BSEd - Science" },
     { value: "BSEd-TLE-IA", label: "BSEd-TLE - Industrial Arts" },
     { value: "BSEd-TLE-HE", label: "BSEd-TLE - Home Economics" },
-    { value: "BEEd", label: "Bachelor of Elementary Education" },
-    { value: "BSTrM", label: "BS Tourism Management" }
+    { value: "BPEd", label: "Bachelor of Physical Education (BPEd)" },
+    { value: "BSCrim", label: "Bachelor of Science in Criminology (BSCrim)" }
   ];
 
   let yearOptions = [
@@ -344,9 +348,19 @@
     clearError('gender');
   }
 
+  function selectDepartment(department: string) {
+    formData.department = department;
+    showDepartmentDropdown = false;
+    clearError('department');
+  }
+
   function getGenderLabel(value: string) {
     const found = genderOptions.find(opt => opt.value === value);
     return found ? found.label : "Select gender";
+  }
+
+  function getDepartmentLabel(value: string) {
+    return value || 'Select your department';
   }
 
   function truncateLabel(label: string, max = 30) {
@@ -427,12 +441,25 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
             </svg>
           </div>
-          <div class="text-left">
-            <h3 class="font-semibold">Guided 3-Step Registration</h3>
-            <p class="text-sm text-slate-300">Simple process for both students and faculty</p>
-          </div>
-        </div>
-        <div class="flex items-center space-x-4">
+                  <label id="department-label" class="block text-sm font-semibold text-slate-700 mb-2">Department <span class="text-red-500">*</span></label>
+                  <div class="relative" data-dropdown="department">
+                    <button type="button" aria-labelledby="department-label" aria-haspopup="listbox" aria-expanded={showDepartmentDropdown}
+                      class="w-full px-3.5 py-3 border-2 {errors.department ? 'border-red-400' : 'border-slate-200'} rounded-lg bg-white text-left focus:outline-none focus:ring-2 focus:ring-[#0D5C29]/20 focus:border-[#0D5C29] transition-all shadow-sm flex items-center justify-between"
+                      on:click|stopPropagation={() => { showDepartmentDropdown = !showDepartmentDropdown; showCourseDropdown = false; showYearDropdown = false; showGenderDropdown = false; }}>
+                      <span class="text-sm {formData.department ? 'text-slate-800' : 'text-slate-400'} truncate">{getDepartmentLabel(formData.department)}</span>
+                      <svg class="h-4 w-4 text-slate-400 flex-shrink-0 ml-1 transition-transform {showDepartmentDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    {#if showDepartmentDropdown}
+                      <ul class="absolute z-20 mt-1 w-full bg-white border-2 border-slate-200 rounded-lg shadow-lg overflow-auto max-h-56" role="listbox" aria-labelledby="department-label">
+                        {#each departments as department}
+                          <li class="px-4 py-2.5 cursor-pointer text-sm hover:bg-[#0D5C29]/5 {formData.department === department ? 'bg-[#0D5C29]/10 text-[#0D5C29] font-semibold' : 'text-slate-700'}"
+                            tabindex="0" on:click={() => selectDepartment(department)}
+                            on:keydown={(event: KeyboardEvent) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectDepartment(department); } }}
+                            role="option" aria-selected={formData.department === department}>{department}</li>
+                        {/each}
+                      </ul>
+                    {/if}
+                  </div>
           <div class="bg-[#E8B923] p-3 rounded-full">
             <svg class="h-6 w-6 text-[#0D5C29]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
