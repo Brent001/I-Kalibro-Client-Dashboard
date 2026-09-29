@@ -1,7 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { browser } from '$app/environment';
+  import { replaceState } from '$app/navigation';
   import JournalModal from '$lib/components/ui/JournalModal.svelte';
+  import ItemCard from '$lib/components/ui/ItemCard.svelte';
+  import {
+    getCatalogFillBarStyle as getFillBarStyle,
+    getCatalogPageNumbers as getPageNumbers,
+    getCatalogStatusStyle as getStatusBadgeStyle
+  } from '$lib/utils/catalogDisplay.js';
 
   interface PageData {
     user: {
@@ -204,7 +211,7 @@
     else u.searchParams.delete('category');
     if (currentPage && currentPage > 1) u.searchParams.set('page', String(currentPage));
     else u.searchParams.delete('page');
-    history.replaceState(null, '', u.toString());
+    replaceState(u, {});
   }
 
   onMount(() => {
@@ -224,32 +231,11 @@
     fetchBooks(1);
   }
 
-  function getPageNumbers(current: number, total: number): number[] {
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
-    if (current <= 4) return [1, 2, 3, 4, 5, -1, total];
-    if (current >= total - 3) return [1, -1, total-4, total-3, total-2, total-1, total];
-    return [1, -1, current-1, current, current+1, -1, total];
-  }
-
   $: pageNumbers = getPageNumbers(currentPage, totalPages);
   $: selectedCategoryName = selectedCategory === 'all'
     ? 'All Categories'
     : categories.find(c => String(c.id) === String(selectedCategory))?.name || 'All Categories';
 
-  // Status color helpers — warm earthy tones (same as book page)
-  function getStatusBadgeStyle(status: string | undefined, isReserved: boolean, isBorrowed: boolean): string {
-    if (isBorrowed)              return 'background:#0D5C29; color:#fff;';
-    if (isReserved)              return 'background:#B06A00; color:#fff;';
-    if (status === 'Available')  return 'background:#0D5C29; color:#fff;';
-    if (status === 'Limited')    return 'background:#B06A00; color:#fff;';
-    return 'background:#7A6A5A; color:#fff;';
-  }
-
-  function getFillBarStyle(book: Book): string {
-    if (book.availableCopies > 5) return 'background:#0D5C29;';
-    if (book.availableCopies > 0) return 'background:#B06A00;';
-    return 'background:#C4B8A8;';
-  }
 </script>
 
 <!-- Warm parchment page wrapper -->
@@ -459,117 +445,24 @@
     {#if viewType === 'grid'}
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
         {#each journals as book (book.id)}
-          {@const isReserved = reservedJournalIds.includes(book.id)}
-          {@const isBorrowed = borrowedJournalIds.includes(book.id)}
-          {@const isCancelling = cancellingBookId === book.id}
-          {@const unavailable = book.availableCopies === 0 && !isReserved && !isBorrowed}
-
-          <div
-            on:click={() => openBookModal(book)}
-            on:keydown={(e) => e.key === 'Enter' && openBookModal(book)}
-            tabindex="0" role="button" aria-label="View {book.title}"
-            class="group relative overflow-hidden cursor-pointer flex flex-col outline-none transition-all duration-150 focus-visible:ring-2 focus-visible:ring-offset-1 rounded-xl"
-            style="background: #FDF8F0;
-              border: {isReserved ? '2px solid #B06A00' : isBorrowed ? '2px solid #0D5C29' : '1.5px solid #D4C4A8'};
-              box-shadow: 0 1px 3px rgba(44,26,14,0.08);"
-            on:mouseenter={(e) => { if (!isReserved && !isBorrowed) { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 12px rgba(44,26,14,0.15)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; } }}
-            on:mouseleave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 3px rgba(44,26,14,0.08)'; (e.currentTarget as HTMLElement).style.transform = ''; }}
-          >
-            <!-- Cover -->
-            <div class="relative w-full h-40 sm:h-48 overflow-hidden flex-shrink-0" style="background: #E8DED0;">
-              {#if getCoverUrl(book)}
-                <img
-                  src={getCoverUrl(book)}
-                  alt={book.title}
-                  loading="lazy"
-                  class="absolute inset-0 w-full h-full object-cover object-center transition-transform duration-300"
-                  on:load={(e) => {
-                    const img = e.currentTarget as HTMLImageElement;
-                    const cw = img.parentElement!.clientWidth;
-                    const ch = img.parentElement!.clientHeight;
-                    const containerRatio = cw / ch;
-                    const imgRatio = img.naturalWidth / img.naturalHeight;
-                    const scale = imgRatio < containerRatio ? Math.min((containerRatio / imgRatio) * 1.02, 1.6) : 1.02;
-                    img.style.transform = `scale(${scale.toFixed(3)})`;
-                    img.addEventListener('mouseenter', () => { img.style.transform = `scale(${(scale * 1.06).toFixed(3)})`; });
-                    img.addEventListener('mouseleave', () => { img.style.transform = `scale(${scale.toFixed(3)})`; });
-                  }}
-                />
-              {:else}
-                <div class="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3"
-                  style="background: linear-gradient(150deg, #0D5C29, #1a7a3a);">
-                  <div class="absolute left-0 inset-y-0 w-1.5" style="background: #E8B923; opacity: 0.8;"></div>
-                  <svg class="w-8 h-8 text-white/25" viewBox="0 0 24 24" fill="currentColor"><path d="M19 2H6c-1.206 0-3 .799-3 3v14c0 2.201 1.794 3 3 3h15v-2H6.012C5.55 19.988 5 19.806 5 19s.55-.988 1.012-1H21V4c0-1.103-.897-2-2-2z"/></svg>
-                  <p class="text-[10px] font-bold text-white/60 text-center uppercase tracking-wider leading-tight line-clamp-3">{book.title}</p>
-                </div>
-              {/if}
-
-              <!-- Status badge -->
-              <span class="absolute top-2 left-2 flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-md"
-                style="{getStatusBadgeStyle(book.status, isReserved, isBorrowed)}">
-                {isBorrowed ? 'Borrowed' : isReserved ? 'Reserved' : book.status}
-              </span>
-            </div>
-
-            <!-- Body -->
-            <div class="px-2 pt-2 pb-2.5 flex flex-col gap-1 flex-1">
-              <h3 class="text-xs font-bold leading-tight line-clamp-2" style="color: #1A3A1A;">{book.title}</h3>
-              <p class="text-[11px] truncate leading-none" style="color: #9A7A5A;">{book.author}</p>
-
-              <!-- Availability bar -->
-              <div class="flex items-center gap-1.5 mt-0.5">
-                <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background: #E8DED0;">
-                  <div class="h-full rounded-full transition-all" style="{getFillBarStyle(book)} width:{book.totalCopies>0?Math.round((book.availableCopies/book.totalCopies)*100):0}%;"></div>
-                </div>
-                <span class="text-[10px] font-semibold tabular-nums" style="color: #9A7A5A;">{book.availableCopies}/{book.totalCopies}</span>
-              </div>
-
-              <!-- Actions -->
-              <div class="flex gap-1 mt-0.5">
-                {#if isBorrowed}
-                  <div class="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg border text-xs font-bold"
-                    style="background: #EFF5EF; border-color: #B8D4B8; color: #0D5C29;">
-                    <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>Borrowed
-                  </div>
-                {:else if isReserved}
-                  <div class="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg border text-xs font-bold min-w-0"
-                    style="background: #F5EDD8; border-color: #D4B87A; color: #B06A00;">
-                    <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    <span class="truncate">Reserved</span>
-                  </div>
-                  <button
-                    on:click|stopPropagation={() => handleCancelReserve(book)}
-                    disabled={isCancelling} type="button" title="Cancel"
-                    class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg border transition-all disabled:opacity-50"
-                    style="background: #F5EAEA; border-color: #D4A8A8; color: #A83232;"
-                    on:mouseenter={(e) => { (e.currentTarget as HTMLElement).style.background = '#EDD0D0'; }}
-                    on:mouseleave={(e) => { (e.currentTarget as HTMLElement).style.background = '#F5EAEA'; }}
-                  >
-                    {#if isCancelling}
-                      <span class="w-3 h-3 border rounded-full animate-spin" style="border-color: #D4A8A8; border-top-color: #A83232;"></span>
-                    {:else}
-                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                    {/if}
-                  </button>
-                {:else}
-                  <button
-                    on:click|stopPropagation={() => handleBookAction(book)}
-                    disabled={actionLoading || unavailable} type="button"
-                    class="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-xs font-bold transition-all active:scale-95"
-                    style="{unavailable ? 'background: #E8DED0; color: #9A8A7A; cursor: not-allowed;' : 'background: #0D5C29; color: #F5F0E8;'}"
-                  >
-                    {#if actionLoading}
-                      <span class="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin"></span>
-                    {:else if unavailable}
-                      Unavailable
-                    {:else}
-                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>Reserve
-                    {/if}
-                  </button>
-                {/if}
-              </div>
-            </div>
-          </div>
+        <ItemCard
+            title={book.title}
+            author={book.author}
+            year={book.publishedYear}
+            subtitle={book.category ?? book.publisher ?? null}
+            coverImageUrl={getCoverUrl(book)}
+            availableCopies={book.availableCopies}
+            totalCopies={book.totalCopies}
+            isReserved={reservedJournalIds.includes(book.id)}
+            isBorrowed={borrowedJournalIds.includes(book.id)}
+            requesting={actionLoading}
+            cancelling={cancellingBookId === book.id}
+            busy={actionLoading}
+            requestLabel="Reserve"
+            onSelect={() => openBookModal(book)}
+            onRequest={() => { void handleBookAction(book); }}
+            onCancel={() => { void handleCancelReserve(book); }}
+          />
         {/each}
       </div>
 
@@ -610,7 +503,7 @@
                         {/if}
                       </div>
                       <div class="min-w-0">
-                        <p class="text-sm font-bold line-clamp-1" style="color: #1A3A1A;">{book.title}</p>
+                        <p class="text-sm font-bold leading-5 line-clamp-2 min-h-10" style="color: #1A3A1A;">{book.title}</p>
                         <p class="text-xs font-semibold" style="color: #B06A00;">#{book.bookId}</p>
                         <p class="text-xs italic sm:hidden truncate" style="color: #9A7A5A;">{book.author}</p>
                       </div>

@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
+import { randomInt } from 'node:crypto';
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db/index.js';
@@ -8,7 +9,7 @@ import { eq, or } from 'drizzle-orm';
 import { redisClient } from '$lib/server/db/cache.js';
 
 function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 async function checkRateLimit(identifier: string): Promise<boolean> {
@@ -49,7 +50,7 @@ async function checkRateLimit(identifier: string): Promise<boolean> {
   return true;
 }
 
-const resend = new Resend(env.VITE_RESEND_API_KEY);
+const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
 export const POST: RequestHandler = async ({ request }) => {
   try {
@@ -59,6 +60,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
     if (!identifier || identifier.trim().length === 0) {
       return json({ success: false, message: 'Email or username is required' }, { status: 400 });
+    }
+    if (!resend) {
+      return json({ success: false, message: 'Email service is not configured' }, { status: 503 });
     }
 
     const trimmedIdentifier = identifier.trim();
@@ -144,12 +148,6 @@ export const POST: RequestHandler = async ({ request }) => {
         { status: 500 }
       );
     }
-
-    console.log(`[Send OTP] OTP saved to Redis:`, { key, otp, expiresAt });
-
-    // Verify OTP was saved
-    const verification = await redisClient.get(key);
-    console.log(`[Send OTP] Verification read from Redis:`, verification);
 
     // Mask email for display
     const maskedEmail = normalizedEmail.replace(/^(.{2})(.*)(@.*)$/, (_, start, middle, domain) => {
@@ -263,7 +261,6 @@ export const POST: RequestHandler = async ({ request }) => {
       });
 
       console.log(`[Send OTP] Email sent successfully to ${normalizedEmail}`);
-      console.log(`[Send OTP] OTP for testing: ${otp}`);
 
       return json({ 
         success: true, 

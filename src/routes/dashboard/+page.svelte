@@ -1,5 +1,20 @@
 <script lang="ts">
   import { page } from "$app/stores";
+  import {
+    Bell,
+    BookOpen,
+    Bookmark,
+    Calendar,
+    Check,
+    CircleCheck,
+    Clock,
+    CreditCard,
+    History,
+    Plus,
+    Search,
+    TriangleAlert,
+    Undo2
+  } from '@lucide/svelte';
 
   type BorrowedBook = {
     status: string;
@@ -65,13 +80,15 @@
   }
 
   const quickActions = [
-    { label: 'Browse Catalog', icon: 'search',   href: '/catalog',       color: '#0D5C29', bg: '#C8DFC8' },
-    { label: 'Reserve Book',   icon: 'bookmark',  href: '/catalog',       color: '#2E6B45', bg: '#D4E6D4' },
-    { label: 'Return Request', icon: 'return',    href: '/my-books',      color: '#1A4A7A', bg: '#C8D8EE' },
-    { label: 'Pay Fines',      icon: 'pay',       href: '/penalties',     color: '#7A5A00', bg: '#EEE0A8' },
-    { label: 'My History',     icon: 'history',   href: '/history',       color: '#5A1A7A', bg: '#E0C8EE' },
-    { label: 'Notifications',  icon: 'bell',      href: '/notifications', color: '#8B1A1A', bg: '#EED0C8' },
+    { label: 'Browse Catalog', icon: 'search',   href: '/dashboard/books',         color: '#0D5C29', bg: '#C8DFC8' },
+    { label: 'Reserve a Copy', icon: 'bookmark', href: '/dashboard/books',         color: '#2E6B45', bg: '#D4E6D4' },
+    { label: 'My Items',       icon: 'return',   href: '/dashboard/issued',        color: '#1A4A7A', bg: '#C8D8EE' },
+    { label: 'Fine Status',    icon: 'pay',      href: '/dashboard/fines',          color: '#7A5A00', bg: '#EEE0A8' },
+    { label: 'My History',     icon: 'history',  href: '/dashboard/history',        color: '#5A1A7A', bg: '#E0C8EE' },
+    { label: 'Notifications',  icon: 'bell',     href: '/dashboard/notifications',  color: '#8B1A1A', bg: '#EED0C8' },
   ];
+
+  const quickActionIcons = { search: Search, bookmark: Bookmark, return: Undo2, pay: CreditCard, history: History, bell: Bell };
 </script>
 
 <svelte:head>
@@ -112,7 +129,7 @@
       {#if overdueCount > 0}
         <div class="flex items-start gap-2 px-3 py-2.5 sm:px-4 rounded-lg text-xs sm:text-sm leading-snug border"
           style="background: #F5E6E6; color: #7A1A1A; border-color: #D4A0A0;">
-          <svg class="w-3.5 h-3.5 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd"/></svg>
+          <TriangleAlert class="w-3.5 h-3.5 shrink-0 mt-0.5" aria-hidden="true" />
           <span><strong>{overdueCount} overdue</strong> item{overdueCount > 1 ? 's' : ''} — return immediately to avoid higher fines.</span>
         </div>
       {/if}
@@ -133,7 +150,7 @@
       <div class="rounded-xl py-3 px-2 flex flex-col items-center justify-center gap-1.5 shadow-sm text-center border"
         style="background: #EFF5EF; border-color: #B8D4B8;">
         <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background: #0D5C29;">
-          <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M11.25 4.533A9.707 9.707 0 0 0 6 3a9.735 9.735 0 0 0-3.25.555.75.75 0 0 0-.5.707v14.25a.75.75 0 0 0 1 .707A8.237 8.237 0 0 1 6 18.75c1.995 0 3.823.707 5.25 1.886V4.533ZM12.75 20.636A8.214 8.214 0 0 1 18 18.75c.966 0 1.89.166 2.75.47a.75.75 0 0 0 1-.708V4.262a.75.75 0 0 0-.5-.707A9.735 9.735 0 0 0 18 3a9.707 9.707 0 0 0-5.25 1.533v16.103Z"/></svg>
+          <BookOpen class="w-4 h-4 text-white" aria-hidden="true" />
         </div>
         <div class="text-lg font-extrabold leading-none" style="color: #0D5C29;">{currentBooksCount}</div>
         <div class="text-xs font-medium leading-tight" style="color: #5A7A5A;">Borrowed</div>
@@ -142,7 +159,7 @@
       <div class="rounded-xl py-3 px-2 flex flex-col items-center justify-center gap-1.5 shadow-sm text-center border"
         style="background: #EAF2EC; border-color: #B0CCB8;">
         <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background: #2E6B45;">
-          <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M6.32 2.577a49.255 49.255 0 0 1 11.36 0c1.497.174 2.57 1.46 2.57 2.93V21a.75.75 0 0 1-1.085.67L12 18.089l-7.165 3.583A.75.75 0 0 1 3.75 21V5.507c0-1.47 1.073-2.756 2.57-2.93Z" clip-rule="evenodd"/></svg>
+          <Bookmark class="w-4 h-4 text-white" aria-hidden="true" />
         </div>
         <div class="text-lg font-extrabold leading-none" style="color: #2E6B45;">{reservationsCount}</div>
         <div class="text-xs font-medium leading-tight" style="color: #5A7A5A;">Reserved</div>
@@ -151,7 +168,7 @@
       <div class="rounded-xl py-3 px-2 flex flex-col items-center justify-center gap-1.5 shadow-sm text-center border"
         style="background: #F5EAEA; border-color: #D4A8A8;">
         <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background: #A83232;">
-          <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd"/></svg>
+          <TriangleAlert class="w-4 h-4 text-white" aria-hidden="true" />
         </div>
         <div class="text-lg font-extrabold leading-none" style="color: {overdueCount > 0 ? '#A83232' : '#3A2A1A'};">{overdueCount}</div>
         <div class="text-xs font-medium leading-tight" style="color: #7A5A5A;">Overdue</div>
@@ -162,7 +179,7 @@
       <div class="rounded-xl py-3 px-2 flex flex-col items-center justify-center gap-1.5 shadow-sm text-center border"
         style="background: #F5EDD8; border-color: #D4B87A;">
         <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style="background: #B06A00;">
-          <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd"/></svg>
+          <Clock class="w-4 h-4 text-white" aria-hidden="true" />
         </div>
         <div class="text-lg font-extrabold leading-none" style="color: {dueSoonBooks.length > 0 ? '#B06A00' : '#3A2A1A'};">{dueSoonBooks.length}</div>
         <div class="text-xs font-medium leading-tight" style="color: #7A6A3A;">Due Soon</div>
@@ -184,7 +201,7 @@
     <div class="rounded-xl py-3 px-2 flex flex-col items-center justify-center gap-2 shadow-sm text-center border transition-all hover:shadow-md hover:-translate-y-0.5"
       style="background: #EFF5EF; border-color: #B8D4B8;">
       <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background: #0D5C29;">
-        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M11.25 4.533A9.707 9.707 0 0 0 6 3a9.735 9.735 0 0 0-3.25.555.75.75 0 0 0-.5.707v14.25a.75.75 0 0 0 1 .707A8.237 8.237 0 0 1 6 18.75c1.995 0 3.823.707 5.25 1.886V4.533ZM12.75 20.636A8.214 8.214 0 0 1 18 18.75c.966 0 1.89.166 2.75.47a.75.75 0 0 0 1-.708V4.262a.75.75 0 0 0-.5-.707A9.735 9.735 0 0 0 18 3a9.707 9.707 0 0 0-5.25 1.533v16.103Z"/></svg>
+        <BookOpen class="w-5 h-5 text-white" aria-hidden="true" />
       </div>
       <div class="text-2xl font-extrabold leading-none" style="color: #0D5C29;">{currentBooksCount}</div>
       <div class="text-xs font-medium leading-tight" style="color: #5A7A5A;">Borrowed</div>
@@ -192,7 +209,7 @@
     <div class="rounded-xl py-3 px-2 flex flex-col items-center justify-center gap-2 shadow-sm text-center border transition-all hover:shadow-md hover:-translate-y-0.5"
       style="background: #EAF2EC; border-color: #B0CCB8;">
       <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background: #2E6B45;">
-        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M6.32 2.577a49.255 49.255 0 0 1 11.36 0c1.497.174 2.57 1.46 2.57 2.93V21a.75.75 0 0 1-1.085.67L12 18.089l-7.165 3.583A.75.75 0 0 1 3.75 21V5.507c0-1.47 1.073-2.756 2.57-2.93Z" clip-rule="evenodd"/></svg>
+        <Bookmark class="w-5 h-5 text-white" aria-hidden="true" />
       </div>
       <div class="text-2xl font-extrabold leading-none" style="color: #2E6B45;">{reservationsCount}</div>
       <div class="text-xs font-medium leading-tight" style="color: #5A7A5A;">Reserved</div>
@@ -200,7 +217,7 @@
     <div class="rounded-xl py-3 px-2 flex flex-col items-center justify-center gap-2 shadow-sm text-center border transition-all hover:shadow-md hover:-translate-y-0.5"
       style="background: #F5EAEA; border-color: #D4A8A8;">
       <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background: #A83232;">
-        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd"/></svg>
+        <TriangleAlert class="w-5 h-5 text-white" aria-hidden="true" />
       </div>
       <div class="text-2xl font-extrabold leading-none" style="color: {overdueCount > 0 ? '#A83232' : '#3A2A1A'};">{overdueCount}</div>
       <div class="text-xs font-medium leading-tight" style="color: #7A5A5A;">Overdue</div>
@@ -208,7 +225,7 @@
     <div class="rounded-xl py-3 px-2 flex flex-col items-center justify-center gap-2 shadow-sm text-center border transition-all hover:shadow-md hover:-translate-y-0.5"
       style="background: #F5EDD8; border-color: #D4B87A;">
       <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style="background: #B06A00;">
-        <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd"/></svg>
+        <Clock class="w-5 h-5 text-white" aria-hidden="true" />
       </div>
       <div class="text-2xl font-extrabold leading-none" style="color: {dueSoonBooks.length > 0 ? '#B06A00' : '#3A2A1A'};">{dueSoonBooks.length}</div>
       <div class="text-xs font-medium leading-tight" style="color: #7A6A3A;">Due Soon</div>
@@ -236,19 +253,7 @@
           style="background: {qa.bg}; border-color: {qa.color}22;"
         >
           <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center" style="background: {qa.color};">
-            {#if qa.icon === 'search'}
-              <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M10.5 3.75a6.75 6.75 0 1 0 0 13.5 6.75 6.75 0 0 0 0-13.5ZM2.25 10.5a8.25 8.25 0 1 1 14.59 5.28l4.69 4.69a.75.75 0 1 1-1.06 1.06l-4.69-4.69A8.25 8.25 0 0 1 2.25 10.5Z" clip-rule="evenodd"/></svg>
-            {:else if qa.icon === 'bookmark'}
-              <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M6.32 2.577a49.255 49.255 0 0 1 11.36 0c1.497.174 2.57 1.46 2.57 2.93V21a.75.75 0 0 1-1.085.67L12 18.089l-7.165 3.583A.75.75 0 0 1 3.75 21V5.507c0-1.47 1.073-2.756 2.57-2.93Z" clip-rule="evenodd"/></svg>
-            {:else if qa.icon === 'return'}
-              <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M9.53 2.47a.75.75 0 0 1 0 1.06L4.81 8.25H15a6.75 6.75 0 0 1 0 13.5h-3a.75.75 0 0 1 0-1.5h3a5.25 5.25 0 1 0 0-10.5H4.81l4.72 4.72a.75.75 0 1 1-1.06 1.06l-6-6a.75.75 0 0 1 0-1.06l6-6a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd"/></svg>
-            {:else if qa.icon === 'pay'}
-              <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M4.5 3.75a3 3 0 0 0-3 3v.75h21v-.75a3 3 0 0 0-3-3h-15Z"/><path fill-rule="evenodd" d="M22.5 9.75h-21v7.5a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3v-7.5Zm-18 3.75a.75.75 0 0 1 .75-.75h6a.75.75 0 0 1 0 1.5h-6a.75.75 0 0 1-.75-.75Zm.75 2.25a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Z" clip-rule="evenodd"/></svg>
-            {:else if qa.icon === 'history'}
-              <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd"/></svg>
-            {:else}
-              <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M5.85 3.5a.75.75 0 0 0-1.117-1 9.719 9.719 0 0 0-2.348 4.876.75.75 0 0 0 1.479.248A8.219 8.219 0 0 1 5.85 3.5ZM19.267 2.5a.75.75 0 1 0-1.118 1 8.22 8.22 0 0 1 1.987 4.124.75.75 0 0 0 1.48-.248A9.72 9.72 0 0 0 19.266 2.5Z"/><path fill-rule="evenodd" d="M12 2.25A6.75 6.75 0 0 0 5.25 9v.75a8.217 8.217 0 0 1-2.119 5.52.75.75 0 0 0 .298 1.206c1.544.57 3.16.99 4.831 1.243a3.75 3.75 0 1 0 7.48 0 24.583 24.583 0 0 0 4.83-1.244.75.75 0 0 0 .298-1.205 8.217 8.217 0 0 1-2.118-5.52V9A6.75 6.75 0 0 0 12 2.25Zm0 18a2.25 2.25 0 0 1-2.248-2.354 24.183 24.183 0 0 0 4.496 0A2.25 2.25 0 0 1 12 20.25Z" clip-rule="evenodd"/></svg>
-            {/if}
+            <svelte:component this={quickActionIcons[qa.icon as keyof typeof quickActionIcons] ?? Bell} class="h-5 w-5 text-white" strokeWidth={2} aria-hidden="true" />
           </div>
           <span class="text-xs font-semibold leading-tight text-center" style="color: {qa.color};">{qa.label}</span>
         </a>
@@ -302,15 +307,13 @@
             <!-- Book icon -->
             <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0"
               style="background: {status === 'overdue' ? '#F5EAEA' : status === 'due-soon' ? '#F5EDD8' : '#E8F4E8'};">
-              <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24"
-                style="color: {status === 'overdue' ? '#A83232' : status === 'due-soon' ? '#B06A00' : '#0D5C29'};">
-                <path d="M11.25 4.533A9.707 9.707 0 0 0 6 3a9.735 9.735 0 0 0-3.25.555.75.75 0 0 0-.5.707v14.25a.75.75 0 0 0 1 .707A8.237 8.237 0 0 1 6 18.75c1.995 0 3.823.707 5.25 1.886V4.533ZM12.75 20.636A8.214 8.214 0 0 1 18 18.75c.966 0 1.89.166 2.75.47a.75.75 0 0 0 1-.708V4.262a.75.75 0 0 0-.5-.707A9.735 9.735 0 0 0 18 3a9.707 9.707 0 0 0-5.25 1.533v16.103Z"/>
-              </svg>
+              <BookOpen class="w-3.5 h-3.5 sm:w-4 sm:h-4"
+                style="color: {status === 'overdue' ? '#A83232' : status === 'due-soon' ? '#B06A00' : '#0D5C29'};" aria-hidden="true" />
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-xs sm:text-sm font-bold leading-tight line-clamp-1" style="color: #1A3A1A;">{book.title}</p>
               <p class="text-[10px] sm:text-xs mt-0.5 flex items-center gap-1" style="color: #7A9A7A;">
-                <svg class="w-2.5 h-2.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <Calendar class="w-2.5 h-2.5 shrink-0" aria-hidden="true" />
                 Due {book.dueDate}
               </p>
             </div>
@@ -332,7 +335,7 @@
           </div>
         {:else}
           <div class="flex flex-col items-center justify-center py-6 sm:py-7" style="color: #7A9A7A;">
-            <svg class="w-7 h-7 sm:w-10 sm:h-10 mb-1.5 sm:mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+            <BookOpen class="w-7 h-7 sm:w-10 sm:h-10 mb-1.5 sm:mb-3 opacity-30" strokeWidth={1.5} aria-hidden="true" />
             <span class="text-xs sm:text-sm">No books borrowed</span>
           </div>
         {/each}
@@ -353,9 +356,7 @@
             <!-- Bookmark icon -->
             <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0"
               style="background: #D4ECD8;">
-              <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24" style="color: #2E6B45;">
-                <path fill-rule="evenodd" d="M6.32 2.577a49.255 49.255 0 0 1 11.36 0c1.497.174 2.57 1.46 2.57 2.93V21a.75.75 0 0 1-1.085.67L12 18.089l-7.165 3.583A.75.75 0 0 1 3.75 21V5.507c0-1.47 1.073-2.756 2.57-2.93Z" clip-rule="evenodd"/>
-              </svg>
+              <Bookmark class="w-3.5 h-3.5 sm:w-4 sm:h-4" style="color: #2E6B45;" aria-hidden="true" />
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-xs sm:text-sm font-bold leading-tight line-clamp-1" style="color: #1A3A1A;">{res.title}</p>
@@ -368,7 +369,7 @@
           </div>
         {:else}
           <div class="flex flex-col items-center justify-center py-6 sm:py-7" style="color: #7A9A7A;">
-            <svg class="w-7 h-7 sm:w-10 sm:h-10 mb-1.5 sm:mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            <Calendar class="w-7 h-7 sm:w-10 sm:h-10 mb-1.5 sm:mb-3 opacity-30" strokeWidth={1.5} aria-hidden="true" />
             <span class="text-xs sm:text-sm">No reservations</span>
           </div>
         {/each}
@@ -389,22 +390,22 @@
             style="background: #FDFAF5; border-color: #D4C4A8; border-left: 3px solid {actColor};">
             <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0" style="background: {actBg};">
               {#if act.type === 'borrow'}
-                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24" style="color:{actColor}"><path fill-rule="evenodd" d="M12 3.75a.75.75 0 0 1 .75.75v6.75h6.75a.75.75 0 0 1 0 1.5h-6.75v6.75a.75.75 0 0 1-1.5 0v-6.75H4.5a.75.75 0 0 1 0-1.5h6.75V4.5a.75.75 0 0 1 .75-.75Z" clip-rule="evenodd"/></svg>
+                <Plus class="w-3.5 h-3.5 sm:w-4 sm:h-4" style="color:{actColor}" aria-hidden="true" />
               {:else if act.type === 'return'}
-                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24" style="color:{actColor}"><path fill-rule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd"/></svg>
+                <Check class="w-3.5 h-3.5 sm:w-4 sm:h-4" style="color:{actColor}" aria-hidden="true" />
               {:else if act.type === 'penalty'}
-                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24" style="color:{actColor}"><path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd"/></svg>
+                <TriangleAlert class="w-3.5 h-3.5 sm:w-4 sm:h-4" style="color:{actColor}" aria-hidden="true" />
               {:else if act.type === 'reservation'}
-                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24" style="color:{actColor}"><path fill-rule="evenodd" d="M6.32 2.577a49.255 49.255 0 0 1 11.36 0c1.497.174 2.57 1.46 2.57 2.93V21a.75.75 0 0 1-1.085.67L12 18.089l-7.165 3.583A.75.75 0 0 1 3.75 21V5.507c0-1.47 1.073-2.756 2.57-2.93Z" clip-rule="evenodd"/></svg>
+                <Bookmark class="w-3.5 h-3.5 sm:w-4 sm:h-4" style="color:{actColor}" aria-hidden="true" />
               {:else}
-                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24" style="color:{actColor}"><path fill-rule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25ZM12.75 6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-3.75V6Z" clip-rule="evenodd"/></svg>
+                <Clock class="w-3.5 h-3.5 sm:w-4 sm:h-4" style="color:{actColor}" aria-hidden="true" />
               {/if}
             </div>
             <div class="flex-1 min-w-0">
               <p class="text-xs sm:text-sm font-semibold line-clamp-1" style="color: #3A2A1A;">{act.details}</p>
               <p class="text-[10px] sm:text-xs mt-0.5" style="color: #9A7A5A;">{act.timestamp}</p>
             </div>
-            <span class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md shrink-0 capitalize"
+            <span class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md shrink-0"
               style="background: {actBg}; color: {actColor};">{act.type}</span>
           </div>
         {:else}
@@ -430,17 +431,13 @@
           {@const unpaid = penalty.status === 'unpaid' || penalty.status === 'overdue'}
           <div class="flex items-center gap-2.5 sm:gap-3 px-2.5 py-2 sm:px-3 sm:py-2.5 rounded-xl border shadow-sm transition-all hover:shadow-md hover:-translate-y-px"
             style="background: {unpaid ? '#FDFAF5' : '#FAFDFB'}; border-color: {unpaid ? '#D4B87A' : '#B8D4B8'}; border-left: 3px solid {unpaid ? '#A83232' : '#0D5C29'};">
-            <!-- Status dot icon -->
+            <!-- Status icon -->
             <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0"
               style="background: {unpaid ? '#F5EDD8' : '#E8F4E8'};">
               {#if unpaid}
-                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24" style="color: #A83232;">
-                  <path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd"/>
-                </svg>
+                <TriangleAlert class="w-3.5 h-3.5 sm:w-4 sm:h-4" style="color: #A83232;" aria-hidden="true" />
               {:else}
-                <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="currentColor" viewBox="0 0 24 24" style="color: #0D5C29;">
-                  <path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clip-rule="evenodd"/>
-                </svg>
+                <CircleCheck class="w-3.5 h-3.5 sm:w-4 sm:h-4" style="color: #0D5C29;" aria-hidden="true" />
               {/if}
             </div>
             <div class="flex-1 min-w-0">
@@ -459,7 +456,7 @@
           </div>
         {:else}
           <div class="flex flex-col items-center justify-center py-6 sm:py-7" style="color: #2E6B45;">
-            <svg class="w-7 h-7 sm:w-10 sm:h-10 mb-1.5 sm:mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+            <CircleCheck class="w-7 h-7 sm:w-10 sm:h-10 mb-1.5 sm:mb-3 opacity-30" strokeWidth={1.5} aria-hidden="true" />
             <span class="text-xs sm:text-sm font-medium">No penalties — great standing!</span>
           </div>
         {/each}

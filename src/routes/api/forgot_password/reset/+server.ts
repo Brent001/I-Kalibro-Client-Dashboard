@@ -7,14 +7,13 @@ import { db } from '$lib/server/db/index.js';
 import { tbl_user } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 import { redisClient } from '$lib/server/db/cache.js';
+import { logUserActivity } from '$lib/server/db/activity.js';
 
-const resend = new Resend(env.VITE_RESEND_API_KEY);
+const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
 export const POST: RequestHandler = async ({ request }) => {
   try {
     const { email, otp, newPassword } = await request.json();
-
-    console.log(`[Reset Password] Request received - email: ${email}`);
 
     if (!email || !otp || !newPassword) {
       return json(
@@ -28,13 +27,9 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Verify OTP from Redis FIRST
     const key = `otp:${normalizedEmail}`;
-    console.log(`[Reset Password] Checking OTP for key: ${key}`);
-    
     const storedRaw = await redisClient.get(key);
-    console.log(`[Reset Password] OTP data from Redis:`, storedRaw);
 
     if (!storedRaw) {
-      console.log(`[Reset Password] No OTP found in Redis`);
       return json({ 
         success: false, 
         message: 'OTP not found or expired. Please request a new one.' 
@@ -45,7 +40,6 @@ export const POST: RequestHandler = async ({ request }) => {
     try {
       stored = JSON.parse(storedRaw);
     } catch (parseError) {
-      console.error(`[Reset Password] Failed to parse OTP data:`, parseError);
       await redisClient.del(key);
       return json({ 
         success: false, 
@@ -55,7 +49,6 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Check if OTP expired
     if (Date.now() > stored.expiresAt) {
-      console.log(`[Reset Password] OTP expired`);
       await redisClient.del(key);
       return json({ 
         success: false, 
@@ -65,14 +58,11 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Verify OTP matches
     if (stored.otp !== normalizedOTP) {
-      console.log(`[Reset Password] OTP mismatch - Expected: ${stored.otp}, Got: ${normalizedOTP}`);
       return json({ 
         success: false, 
         message: 'Invalid OTP. Please verify your OTP again.' 
       }, { status: 400 });
     }
-
-    console.log(`[Reset Password] OTP verified successfully`);
 
     // Validate user exists using the email from OTP data
     const [userRow] = await db
@@ -82,7 +72,6 @@ export const POST: RequestHandler = async ({ request }) => {
       .limit(1);
 
     if (!userRow) {
-      console.log(`[Reset Password] No user found for email: ${normalizedEmail}`);
       await redisClient.del(key);
       return json({ 
         success: false, 
@@ -121,8 +110,6 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    console.log(`[Reset Password] Password hashed successfully`);
-
     // Update password in database
     await db
       .update(tbl_user)
@@ -132,14 +119,18 @@ export const POST: RequestHandler = async ({ request }) => {
       })
       .where(eq(tbl_user.email, normalizedEmail));
 
-    console.log(`[Reset Password] Password updated in database for ${normalizedEmail}`);
+    await logUserActivity({
+      userId: userRow.id,
+      activityType: 'password_reset',
+      details: 'Reset account password'
+    });
 
     // Delete OTP from Redis after successful reset
     await redisClient.del(key);
-    console.log(`[Reset Password] OTP deleted from Redis`);
 
     // Send confirmation email
     try {
+      if (!resend) throw new Error('Email service is not configured');
       await resend.emails.send({
         from: 'i-Kalibro <no-reply@i-kalibro.online>',
         to: normalizedEmail,
@@ -222,7 +213,6 @@ export const POST: RequestHandler = async ({ request }) => {
           </html>
         `,
       });
-      console.log(`[Reset Password] Confirmation email sent to ${normalizedEmail}`);
     } catch (emailError) {
       console.error('[Reset Password] Failed to send confirmation email:', emailError);
       // Don't fail the request if email fails - password was already reset

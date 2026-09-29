@@ -21,8 +21,8 @@ export async function logUserActivity(params: UserActivityParams) {
             userId: params.userId,
             activityType: params.activityType,
             itemType: params.itemType || null,
-            itemId: params.itemId || null,
-            details: params.details || null,
+            itemId: params.itemId ?? null,
+            details: params.details ?? null,
             timestamp: new Date()
         });
     } catch (err) {
@@ -36,17 +36,11 @@ export async function logUserActivity(params: UserActivityParams) {
  * accidentally returning huge result sets.
  */
 export async function getUserActivities(userId: number, limit = 100) {
-    if (limit > 1000) limit = 1000;
-    try {
-        const rows = await db
-            .select()
-            .from(tbl_user_activity)
-            .where(eq(tbl_user_activity.userId, userId))
-            .orderBy(desc(tbl_user_activity.timestamp))
-            .limit(limit);
-        return rows;
-    } catch (err) {
-        console.error('Failed to fetch user activities:', err);
-        return [];
-    }
+    const safeLimit = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 100;
+    return db
+        .select()
+        .from(tbl_user_activity)
+        .where(eq(tbl_user_activity.userId, userId))
+        .orderBy(desc(tbl_user_activity.timestamp))
+        .limit(safeLimit);
 }

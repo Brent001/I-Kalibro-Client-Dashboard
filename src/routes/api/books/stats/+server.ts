@@ -11,7 +11,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-i
 
 interface AuthenticatedUser {
   id: number;
-  role: string;
+  userType: string;
   username: string;
   email: string;
 }
@@ -88,7 +88,7 @@ export const GET: RequestHandler = async ({ request }) => {
     const lowStockResult = await db
       .select({ count: count() })
       .from(tbl_book)
-      .where(gt(3, tbl_book.availableCopies));
+      .where(gt(tbl_book.availableCopies, 0));
     const lowStock = lowStockResult[0]?.count || 0;
 
     // Out of stock books

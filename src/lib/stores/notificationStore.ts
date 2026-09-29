@@ -1,5 +1,18 @@
 import { writable } from 'svelte/store';
 
+export interface PersistedNotification {
+  id: number;
+  title: string;
+  message: string;
+  type: string;
+  relatedItemType: string | null;
+  relatedItemId: number | null;
+  isRead: boolean | null;
+  sentAt: string | null;
+}
+
+export const persistedNotifications = writable<PersistedNotification[]>([]);
+
 export interface Notification {
   id: string;
   message: string;

@@ -2,7 +2,7 @@ import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 import jwt from 'jsonwebtoken';
 import { db } from '$lib/server/db/index.js';
-import { tbl_user } from '$lib/server/db/schema/schema.js';
+import { tbl_user, tbl_student, tbl_faculty } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
@@ -112,6 +112,23 @@ export const GET: RequestHandler = async ({ request, getClientAddress, cookies }
             );
         }
 
+        let userType = userRow.userType;
+        if (!['student', 'faculty'].includes(userType.toLowerCase())) {
+            const [studentProfile] = await db
+                .select({ id: tbl_student.id })
+                .from(tbl_student)
+                .where(eq(tbl_student.userId, userRow.id))
+                .limit(1);
+            const [facultyProfile] = studentProfile ? [undefined] : await db
+                .select({ id: tbl_faculty.id })
+                .from(tbl_faculty)
+                .where(eq(tbl_faculty.userId, userRow.id))
+                .limit(1);
+
+            if (studentProfile) userType = 'student';
+            else if (facultyProfile) userType = 'faculty';
+        }
+
         // Return user session information
         const sessionData = {
             success: true,
@@ -121,7 +138,7 @@ export const GET: RequestHandler = async ({ request, getClientAddress, cookies }
                     name: userRow.name,
                     username: userRow.username,
                     email: userRow.email,
-                    userType: userRow.userType,
+                    userType,
                     isActive: userRow.isActive
                 },
                 sessionInfo: {

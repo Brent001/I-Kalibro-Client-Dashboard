@@ -1,28 +1,19 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import jwt from 'jsonwebtoken';
 import { db } from '$lib/server/db/index.js';
 import { tbl_user, tbl_student, tbl_faculty } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+import { authenticateClientRequest } from '$lib/server/utils/clientAuth.js';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
-    // Verify authentication
-    const token = cookies.get('client_token');
-    if (!token) {
-      return json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const authenticatedUser = await authenticateClientRequest(request, cookies.get('client_token'));
+    if (!authenticatedUser) return json({ error: 'Unauthorized' }, { status: 401 });
 
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const userId = decoded.userId || decoded.id;
-
-    // Verify user exists and is active
     const [userRow] = await db
-      .select({ id: tbl_user.id, isActive: tbl_user.isActive })
+      .select({ id: tbl_user.id, isActive: tbl_user.isActive, userType: tbl_user.userType })
       .from(tbl_user)
-      .where(eq(tbl_user.id, userId))
+      .where(eq(tbl_user.id, authenticatedUser.id))
       .limit(1);
 
     if (!userRow || !userRow.isActive) {
@@ -35,42 +26,28 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       return json({ error: 'Invalid QR content' }, { status: 400 });
     }
 
-    // Interpret scanned content as student enrollmentNo or facultyNumber
-    const studentRows = await db
-      .select({ userId: tbl_student.userId, enrollmentNo: tbl_student.enrollmentNo })
-      .from(tbl_student)
-      .where(eq(tbl_student.enrollmentNo, content))
-      .limit(1);
-
-    if (studentRows.length > 0) {
-      const student = studentRows[0];
-      const [userInfo] = await db.select({ id: tbl_user.id, username: tbl_user.username, name: tbl_user.name, userType: tbl_user.userType })
-        .from(tbl_user)
-        .where(eq(tbl_user.id, student.userId))
+    let ownIdentifier: string | undefined;
+    if (userRow.userType === 'student') {
+      const [student] = await db
+        .select({ enrollmentNo: tbl_student.enrollmentNo })
+        .from(tbl_student)
+        .where(eq(tbl_student.userId, userRow.id))
         .limit(1);
-      if (userInfo) {
-        return json({ success: true, processed: true, user: userInfo, type: 'student' });
-      }
+      ownIdentifier = student?.enrollmentNo;
+    } else if (userRow.userType === 'faculty') {
+      const [faculty] = await db
+        .select({ facultyNumber: tbl_faculty.facultyNumber })
+        .from(tbl_faculty)
+        .where(eq(tbl_faculty.userId, userRow.id))
+        .limit(1);
+      ownIdentifier = faculty?.facultyNumber;
     }
 
-    const facultyRows = await db
-      .select({ userId: tbl_faculty.userId, facultyNumber: tbl_faculty.facultyNumber })
-      .from(tbl_faculty)
-      .where(eq(tbl_faculty.facultyNumber, content))
-      .limit(1);
-
-    if (facultyRows.length > 0) {
-      const faculty = facultyRows[0];
-      const [userInfo] = await db.select({ id: tbl_user.id, username: tbl_user.username, name: tbl_user.name, userType: tbl_user.userType })
-        .from(tbl_user)
-        .where(eq(tbl_user.id, faculty.userId))
-        .limit(1);
-      if (userInfo) {
-        return json({ success: true, processed: true, user: userInfo, type: 'faculty' });
-      }
+    if (!ownIdentifier || content.trim() !== ownIdentifier.trim()) {
+      return json({ error: 'You can only scan your own library ID' }, { status: 403 });
     }
 
-    return json({ error: 'Scanned ID not found (not a student or faculty number)' }, { status: 400 });
+    return json({ success: true, processed: true });
 
   } catch (error) {
     console.error('QR processing API error:', error);

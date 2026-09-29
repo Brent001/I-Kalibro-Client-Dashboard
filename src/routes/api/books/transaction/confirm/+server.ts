@@ -23,6 +23,7 @@ import {
 import jwt from 'jsonwebtoken';
 import { eq, and, sql } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
+import { logUserActivity } from '$lib/server/db/activity.js';
 
 const JWT_SECRET = env.JWT_SECRET || process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 
@@ -60,7 +61,7 @@ async function authenticateStaff(request: Request) {
     const [userRow] = await db
       .select({ id: tbl_user.id, userType: tbl_user.userType })
       .from(tbl_user)
-      .where(eq(tbl_user.id, userId))
+      .where(and(eq(tbl_user.id, userId), eq(tbl_user.isActive, true)))
       .limit(1);
 
     if (!userRow) return null;
@@ -135,6 +136,12 @@ export const POST: RequestHandler = async ({ request }) => {
         throw { status: 404, message: 'Borrow request not found' };
       }
 
+      const [item] = await tx
+        .select({ title: cfg.itemTable.title })
+        .from(cfg.itemTable)
+        .where(eq(cfg.itemTable.id, reservation[cfg.fk]))
+        .limit(1);
+
       // Find an available copy
       const [copy] = await tx
         .select()
@@ -168,10 +175,28 @@ export const POST: RequestHandler = async ({ request }) => {
       // Mark reservation fulfilled
       await tx.update(cfg.reservationTable).set({ status: 'fulfilled' }).where(eq(cfg.reservationTable.id, reservationId));
 
-      return { itemType, itemId: reservation[cfg.fk], copyId: copy.id };
+      return {
+        itemType,
+        itemId: reservation[cfg.fk],
+        copyId: copy.id,
+        userId: reservation.userId,
+        title: item?.title ?? 'item'
+      };
     });
 
-    return json({ success: true, message: 'Borrow confirmed', data: result });
+    await logUserActivity({
+      userId: result.userId,
+      activityType: 'borrow',
+      itemType: result.itemType,
+      itemId: result.itemId,
+      details: `Borrow approved: ${result.title}`
+    });
+
+    return json({
+      success: true,
+      message: 'Borrow confirmed',
+      data: { itemType: result.itemType, itemId: result.itemId, copyId: result.copyId }
+    });
   } catch (err: any) {
     console.error('confirm borrow error', err);
     if (err?.status) return error(err.status, { message: err.message });

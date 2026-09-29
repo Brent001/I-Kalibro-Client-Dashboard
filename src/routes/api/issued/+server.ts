@@ -1,7 +1,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import jwt from 'jsonwebtoken';
-import { eq, and, gt, lt, or, sql } from 'drizzle-orm';
+import { eq, and, lt, or, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db/index.js';
 import {
   tbl_user,

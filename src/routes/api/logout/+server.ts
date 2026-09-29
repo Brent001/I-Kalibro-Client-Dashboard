@@ -127,7 +127,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 
         // also insert a user activity record so they can view it
         if (userId) {
-            logUserActivity({
+            await logUserActivity({
                 userId: parseInt(userId),
                 activityType: 'logout',
                 details: `Logged out from ${clientIP}`

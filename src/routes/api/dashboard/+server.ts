@@ -84,7 +84,7 @@ export const GET: RequestHandler = async ({ request }) => {
                 id: res.id,
                 title: book?.title || 'Unknown',
                 author: book?.author || 'Unknown',
-                reservedDate: res.reservationDate,
+                reservedDate: res.requestDate,
                 status: res.status
             };
         })

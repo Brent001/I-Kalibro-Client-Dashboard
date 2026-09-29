@@ -3,15 +3,14 @@ import { db } from '$lib/server/db/index.js';
 import { tbl_user } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
-import jwt, { type Secret } from 'jsonwebtoken';
+import jwt, { type Secret, type SignOptions } from 'jsonwebtoken';
 import { z } from 'zod';
 import type { ZodIssue } from 'zod';
-import { dev } from '$app/environment';
 import { logUserActivity } from '$lib/server/db/activity.js';
 
 // Environment variables - ensure these are set
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
-const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '7d';
+const JWT_SECRET: Secret = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || '7d') as SignOptions['expiresIn'];
 
 // Input validation schema
 const loginSchema = z.object({
@@ -163,7 +162,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
         // Log successful login (don't log password or sensitive data)
         console.log(`Successful login: ${foundUser.username} (${foundUser.userType}) from ${clientIP}`);
         // record activity for the user so they can view it later
-        logUserActivity({
+        await logUserActivity({
             userId: foundUser.id,
             activityType: 'login',
             details: `Logged in from ${clientIP}`

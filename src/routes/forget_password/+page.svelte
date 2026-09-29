@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { AlertTriangle, ArrowLeft, ArrowRight, Check, Info, Lock, Mail, RefreshCw, ShieldCheck, User } from '@lucide/svelte';
   let step = 1;
   let identifier = '';
   let actualEmail = '';
@@ -340,9 +341,9 @@
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   {#if useUsername}
-                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    <User class="h-5 w-5 text-slate-400" strokeWidth={2} aria-hidden="true" />
                   {:else}
-                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                    <Mail class="h-5 w-5 text-slate-400" strokeWidth={2} aria-hidden="true" />
                   {/if}
                 </div>
                 <input id="identifier" type={useUsername ? 'text' : 'email'} required bind:value={identifier}

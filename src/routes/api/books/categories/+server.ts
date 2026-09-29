@@ -11,31 +11,13 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-i
 
 interface AuthenticatedUser {
   id: number;
-  role: string;
+  userType: string;
   username: string;
   email: string;
 }
 
-// Function to normalize category names for comparison
 function normalizeCategoryName(name: string): string {
   return name.trim().toLowerCase();
-}
-
-// Function to check if a category name already exists (case-insensitive)
-async function checkDuplicateName(name: string, excludeId?: number): Promise<boolean> {
-  const normalizedName = normalizeCategoryName(name);
-  
-  const query = db
-    .select({ id: tbl_category.id, name: tbl_category.name })
-    .from(tbl_category);
-    
-  if (excludeId) {
-    const existing = await query.where(not(eq(tbl_category.id, excludeId)));
-    return existing.some(cat => normalizeCategoryName(cat.name) === normalizedName);
-  } else {
-    const existing = await query;
-    return existing.some(cat => normalizeCategoryName(cat.name) === normalizedName);
-  }
 }
 
 async function authenticateUser(request: Request): Promise<AuthenticatedUser | null> {
@@ -143,6 +125,7 @@ export const POST: RequestHandler = async ({ request }) => {
     const body = await request.json();
     const name = (body.name || '').trim();
     const description = (body.description || '').trim();
+    const itemType = (body.itemType || '').trim().toLowerCase();
 
     // Validate according to schema
     if (!name) {
@@ -153,6 +136,13 @@ export const POST: RequestHandler = async ({ request }) => {
     }
     if (description.length > 255) {
       throw error(400, { message: 'Description must be at most 255 characters.' });
+    }
+    if (!['book', 'journal', 'magazine', 'thesis'].includes(itemType)) {
+      throw error(400, { message: 'A valid catalog item type is required.' });
+    }
+
+    if (!['staff', 'admin'].includes(user.userType)) {
+      throw error(403, { message: 'Only library staff can manage categories.' });
     }
 
     // Check for duplicate category name (case-insensitive)
@@ -176,7 +166,8 @@ export const POST: RequestHandler = async ({ request }) => {
       .insert(tbl_category)
       .values({
         name,
-        description: description || null
+        description: description || null,
+        itemType
       })
       .returning({
         id: tbl_category.id,
@@ -206,6 +197,9 @@ export const PUT: RequestHandler = async ({ request }) => {
     const user = await authenticateUser(request);
     if (!user) {
       throw error(401, { message: 'Unauthorized' });
+    }
+    if (!['staff', 'admin'].includes(user.userType)) {
+      throw error(403, { message: 'Only library staff can manage categories.' });
     }
 
     const body = await request.json();
@@ -293,6 +287,9 @@ export const DELETE: RequestHandler = async ({ request }) => {
     const user = await authenticateUser(request);
     if (!user) {
       throw error(401, { message: 'Unauthorized' });
+    }
+    if (!['staff', 'admin'].includes(user.userType)) {
+      throw error(403, { message: 'Only library staff can manage categories.' });
     }
 
     const body = await request.json();

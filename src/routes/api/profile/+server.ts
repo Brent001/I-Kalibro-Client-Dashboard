@@ -11,32 +11,21 @@ import {
     tbl_journal_borrowing,
     tbl_library_visit
 } from '$lib/server/db/schema/schema.js';
-import { eq, or, and, count, sql } from 'drizzle-orm';
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
-
-function getAuthUserId(cookies: any): number | null {
-    try {
-        const token = cookies.get('client_token');
-        if (!token) return null;
-        const decoded = jwt.verify(token, JWT_SECRET) as any;
-        return decoded.userId || decoded.id || null;
-    } catch {
-        return null;
-    }
-}
+import { eq, or, and, count } from 'drizzle-orm';
+import { logUserActivity } from '$lib/server/db/activity.js';
+import { authenticateClientRequest } from '$lib/server/utils/clientAuth.js';
 
 // ────────────────────────────────────────────────────
 // GET  /api/profile
 // Returns merged tbl_user + tbl_student | tbl_faculty
 // plus computed stats from borrowing & visit tables
 // ────────────────────────────────────────────────────
-export const GET: RequestHandler = async ({ cookies }) => {
-    const userId = getAuthUserId(cookies);
-    if (!userId) {
+export const GET: RequestHandler = async ({ request, cookies }) => {
+    const user = await authenticateClientRequest(request, cookies.get('client_token'));
+    if (!user) {
         return json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
+    const userId = user.id;
 
     try {
         // ── Core user row ──────────────────────────────
@@ -199,10 +188,11 @@ export const GET: RequestHandler = async ({ cookies }) => {
 // (set by admin at registration).
 // ────────────────────────────────────────────────────
 export const PUT: RequestHandler = async ({ request, cookies }) => {
-    const userId = getAuthUserId(cookies);
-    if (!userId) {
+    const user = await authenticateClientRequest(request, cookies.get('client_token'));
+    if (!user) {
         return json({ success: false, message: 'Unauthorized' }, { status: 401 });
     }
+    const userId = user.id;
 
     try {
         const body = await request.json();
@@ -241,14 +231,6 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
         if (phone !== undefined) userUpdate.phone = phone?.trim() || null;
 
         await db.update(tbl_user).set(userUpdate).where(eq(tbl_user.id, userId));
-        // record activity for later viewing
-        import('$lib/server/db/activity.js').then(({ logUserActivity }) => {
-            logUserActivity({
-                userId,
-                activityType: 'profile_update',
-                details: `Updated profile information`
-            });
-        }).catch(console.error);
 
         // ── Update type-specific table ─────────────────
         const [userRow] = await db
@@ -282,6 +264,12 @@ export const PUT: RequestHandler = async ({ request, cookies }) => {
                 })
                 .where(eq(tbl_faculty.userId, userId));
         }
+
+            await logUserActivity({
+                userId,
+                activityType: 'profile_update',
+                details: 'Updated profile information'
+            });
 
         return json({ success: true, message: 'Profile updated successfully' });
     } catch (error) {

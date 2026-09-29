@@ -1,6 +1,62 @@
 <script lang="ts">
-  import { notifications } from '$lib/stores/notificationStore.js';
+  import { onMount } from 'svelte';
+  import { notifications, persistedNotifications, type PersistedNotification } from '$lib/stores/notificationStore.js';
   import Notification from './notification.svelte';
+
+  let serverNotifications: PersistedNotification[] = [];
+  const dismissedIds = new Set<number>();
+
+  async function loadServerNotifications() {
+    try {
+      const response = await fetch('/api/notifications?limit=50', { credentials: 'include' });
+      if (!response.ok) return;
+      const result = await response.json();
+      const received: PersistedNotification[] = result.data?.notifications ?? [];
+      persistedNotifications.set(received);
+      const unread = received.filter((item) => !item.isRead && !dismissedIds.has(item.id));
+      serverNotifications = unread.slice(0, 3);
+    } catch {
+      // Retain the last successful server state while offline.
+    }
+  }
+
+  async function dismissServerNotification(id: number) {
+    dismissedIds.add(id);
+    serverNotifications = serverNotifications.filter((item) => item.id !== id);
+    try {
+      const response = await fetch('/api/notifications', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId: id })
+      });
+      if (!response.ok) throw new Error('Unable to mark notification as read');
+      persistedNotifications.update((items) => items.map((item) => item.id === id ? { ...item, isRead: true } : item));
+    } catch {
+      dismissedIds.delete(id);
+      await loadServerNotifications();
+    }
+  }
+
+  function toastType(type: string): 'success' | 'error' | 'warning' | 'info' {
+    if (type === 'overdue') return 'error';
+    if (type === 'due_reminder') return 'warning';
+    if (type === 'reservation_ready' || type === 'return_confirmation') return 'success';
+    return 'info';
+  }
+
+  onMount(() => {
+    void loadServerNotifications();
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') void loadServerNotifications();
+    };
+    const interval = window.setInterval(refreshIfVisible, 60_000);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+    };
+  });
 </script>
 
 <div class="fixed top-4 right-4 z-50 space-y-3 max-h-screen overflow-y-auto">
@@ -18,6 +74,16 @@
         // Handle action click if needed
         console.log('Action clicked for notification:', notification.id);
       }}
+    />
+  {/each}
+  {#each serverNotifications as notification (notification.id)}
+    <Notification
+      message={notification.message}
+      type={toastType(notification.type)}
+      duration={0}
+      title={notification.title}
+      timestamp={notification.sentAt ? new Date(notification.sentAt) : undefined}
+      on:close={() => { void dismissServerNotification(notification.id); }}
     />
   {/each}
 </div>

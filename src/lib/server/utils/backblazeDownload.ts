@@ -1,20 +1,20 @@
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { env } from '$env/dynamic/private';
 
 let s3Client: S3Client | null = null;
 
 function initializeS3Client(): S3Client {
     if (s3Client) return s3Client;
 
-    const region = (process.env.BACKBLAZE_REGION || import.meta.env.VITE_BACKBLAZE_REGION as string) || 'us-east-005';
-    const keyId = (process.env.BACKBLAZE_KEY_ID || import.meta.env.VITE_BACKBLAZE_KEY_ID as string) || '';
-    const appKey = (process.env.BACKBLAZE_APPLICATION_KEY || import.meta.env.VITE_BACKBLAZE_APPLICATION_KEY as string) || '';
+    const region = env.BACKBLAZE_REGION || env.VITE_BACKBLAZE_BUCKET_REGION || 'us-east-005';
+    const keyId = env.BACKBLAZE_KEY_ID || env.VITE_BACKBLAZE_KEY_ID || '';
+    const appKey = env.BACKBLAZE_APPLICATION_KEY || env.VITE_BACKBLAZE_APPLICATION_KEY || '';
 
     console.log('Initializing S3Client for download:', {
         region,
         hasKeyId: !!keyId,
         hasAppKey: !!appKey,
-        keyIdPrefix: keyId.substring(0, 10) + '...',
-        source: (process.env.BACKBLAZE_KEY_ID ? 'process.env' : 'import.meta.env')
+        source: 'process.env'
     });
 
     if (!keyId || !appKey) {
@@ -45,7 +45,7 @@ export async function downloadFileFromB2(fileName: string): Promise<{
     contentLength?: number;
     lastModified?: Date;
 }> {
-    const bucketName = (process.env.BACKBLAZE_BUCKET_NAME || import.meta.env.VITE_BACKBLAZE_BUCKET_NAME as string) || 'E-kalibro';
+    const bucketName = env.BACKBLAZE_BUCKET_NAME || env.VITE_BACKBLAZE_BUCKET_NAME || 'E-kalibro';
 
     console.log('downloadFileFromB2:', {
         fileName,
@@ -133,7 +133,7 @@ export async function getFileMetadataFromB2(fileName: string): Promise<{
     contentLength?: number;
     lastModified?: Date;
 }> {
-    const bucketName = (process.env.BACKBLAZE_BUCKET_NAME || import.meta.env.VITE_BACKBLAZE_BUCKET_NAME as string) || 'E-kalibro';
+    const bucketName = env.BACKBLAZE_BUCKET_NAME || env.VITE_BACKBLAZE_BUCKET_NAME || 'E-kalibro';
 
     console.log('getFileMetadataFromB2:', {
         fileName,

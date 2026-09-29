@@ -8,21 +8,29 @@ import {
   tbl_journal_reservation
 } from '$lib/server/db/schema/schema.js';
 import { eq, and, or } from 'drizzle-orm';
+import { authenticateClientRequest } from '$lib/server/utils/clientAuth.js';
+import { logUserActivity } from '$lib/server/db/activity.js';
 
 // Cancel a reservation
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
+    const authenticatedUser = await authenticateClientRequest(request, cookies.get('client_token'));
+    if (!authenticatedUser) return error(401, { message: 'Unauthorized' });
+
     const { itemId, userId, itemType = 'book' } = await request.json();
 
-    if (!itemId || !userId) {
-      return error(400, { message: 'Item ID and User ID are required' });
+    if (!itemId) {
+      return error(400, { message: 'Item ID is required' });
     }
 
-    const itemIdNum = parseInt(itemId);
-    const userIdNum = parseInt(userId);
+    const itemIdNum = Number(itemId);
+    const userIdNum = authenticatedUser.id;
 
-    if (isNaN(itemIdNum) || isNaN(userIdNum)) {
-      return error(400, { message: 'Item ID and User ID must be valid numbers' });
+    if (!Number.isInteger(itemIdNum) || itemIdNum < 1) {
+      return error(400, { message: 'Item ID must be a valid number' });
+    }
+    if (userId !== undefined && Number(userId) !== userIdNum) {
+      return error(403, { message: 'You cannot cancel another user\'s reservation' });
     }
 
     const type = (itemType || 'book').toLowerCase();
@@ -57,13 +65,15 @@ export const POST: RequestHandler = async ({ request }) => {
     await db
       .update(cfg.table)
       .set({ status: 'cancelled' })
-      .where(
-        and(
-          eq(cfg.table.userId, userIdNum),
-          eq(cfg.table[cfg.fk], itemIdNum),
-          or(eq(cfg.table.status, 'active'), eq(cfg.table.status, 'borrow_request'))
-        )
-      );
+      .where(eq(cfg.table.id, reservation.id));
+
+    await logUserActivity({
+      userId: userIdNum,
+      activityType: 'reservation_cancelled',
+      itemType: type,
+      itemId: itemIdNum,
+      details: `Cancelled request for ${type}`
+    });
 
     return json({
       success: true,
@@ -76,6 +86,7 @@ export const POST: RequestHandler = async ({ request }) => {
     });
   } catch (err: any) {
     console.error('Cancel reservation error:', err);
+    if (err?.status) throw err;
     return error(500, { message: 'Internal server error during cancellation' });
   }
 };

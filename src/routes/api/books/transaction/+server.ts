@@ -21,61 +21,9 @@ import {
   tbl_thesis_copy,
   tbl_journal_copy
 } from '$lib/server/db/schema/schema.js';
-import jwt from 'jsonwebtoken';
 import { eq, and, or } from 'drizzle-orm';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
-
-// Helper: Authenticate user
-async function authenticateUser(request: Request) {
-  let token: string | null = null;
-
-  // Get token from Authorization header
-  const authHeader = request.headers.get('authorization') || request.headers.get('Authorization');
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7);
-  }
-
-  if (!token) {
-    return null;
-  }
-
-  let decoded: any;
-  try {
-    decoded = jwt.verify(token, JWT_SECRET);
-  } catch (err) {
-    return null;
-  }
-
-  const userId = decoded.userId || decoded.id;
-  if (!userId) return null;
-
-  try {
-    const [userRow] = await db
-      .select({
-        id: tbl_user.id,
-        username: tbl_user.username,
-        email: tbl_user.email,
-        userType: tbl_user.userType,
-        isActive: tbl_user.isActive
-      })
-      .from(tbl_user)
-      .where(eq(tbl_user.id, userId))
-      .limit(1);
-
-    if (!userRow || !userRow.isActive) return null;
-
-    return {
-      id: userRow.id,
-      userType: userRow.userType,
-      username: userRow.username,
-      email: userRow.email
-    };
-  } catch (dbError) {
-    console.error('Database error in authenticateUser:', dbError);
-    return null;
-  }
-}
+import { authenticateClientRequest } from '$lib/server/utils/clientAuth.js';
+import { logUserActivity } from '$lib/server/db/activity.js';
 
 // Helper: Calculate due date (14 days from today)
 function calculateDueDate(): string {
@@ -90,7 +38,7 @@ function getTodaysDate(): string {
 }
 
 // Reserve a book (users can only reserve ONE book at a time)
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
     let requestBody;
     try {
@@ -101,17 +49,23 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // accept either `itemId` (preferred) or legacy `bookId`
+    const authenticatedUser = await authenticateClientRequest(request, cookies.get('client_token'));
+    if (!authenticatedUser) return error(401, { message: 'Unauthorized' });
+
     const { bookId, itemId, userId, requestType, itemType = 'book' } = requestBody;
     const idRaw = itemId ?? bookId;
-    if (!idRaw || !userId) {
-      return error(400, { message: 'Item ID and User ID are required' });
+    if (!idRaw) {
+      return error(400, { message: 'Item ID is required' });
     }
 
-    const itemIdNum = parseInt(idRaw);
-    const userIdNum = parseInt(userId);
+    const itemIdNum = Number(idRaw);
+    const userIdNum = authenticatedUser.id;
 
-    if (isNaN(itemIdNum) || isNaN(userIdNum)) {
-      return error(400, { message: 'Item ID and User ID must be valid numbers' });
+    if (!Number.isInteger(itemIdNum) || itemIdNum < 1) {
+      return error(400, { message: 'Item ID must be a valid number' });
+    }
+    if (userId !== undefined && Number(userId) !== userIdNum) {
+      return error(403, { message: 'You cannot create a request for another user' });
     }
 
     // support multiple item types (book, magazine, thesis, journal)
@@ -159,7 +113,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Check item existence
     const [targetItem] = await db.select().from(cfg.itemTable).where(eq(cfg.itemTable.id, itemIdNum)).limit(1);
-    if (!targetItem) {
+    if (!targetItem || !targetItem.isActive) {
       return error(404, { message: `${type} not found` });
     }
 
@@ -246,6 +200,14 @@ export const POST: RequestHandler = async ({ request }) => {
       return error(500, { message: 'Failed to create reservation record' });
     }
 
+    await logUserActivity({
+      userId: userIdNum,
+      activityType: 'reservation',
+      itemType: type,
+      itemId: itemIdNum,
+      details: `Requested ${targetItem.title}`
+    });
+
     // User's position is queue.length + 1 (since we just added them)
     const queuePosition = queue.length + 1;
 
@@ -260,6 +222,16 @@ export const POST: RequestHandler = async ({ request }) => {
       const title = 'New Reservation';
       const message = `${targetItem.title} reserved by ${userExists.name ?? 'a member'} (ID:${userIdNum})`;
       const notifVals: any[] = [];
+
+      notifVals.push({
+        recipientId: userIdNum,
+        recipientType: 'user',
+        title: 'Request received',
+        message: `Your request for "${targetItem.title}" was sent to library staff.`,
+        type: 'reservation',
+        relatedItemType: type,
+        relatedItemId: itemIdNum
+      });
 
       staffRows.forEach((r: any) => {
         notifVals.push({ recipientId: r.id, recipientType: 'staff', title, message, type: 'reservation', relatedItemType: type, relatedItemId: itemIdNum });
@@ -303,41 +275,28 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 
 // Borrow a book (disable for users)
-export const PUT: RequestHandler = async ({ request }) => {
+export const PUT: RequestHandler = async () => {
   return error(403, { message: 'Borrowing can only be confirmed by a librarian at the library.' });
 };
 
 // Return a book (optional: keep or restrict as needed)
-export const PATCH: RequestHandler = async ({ request }) => {
+export const PATCH: RequestHandler = async () => {
   return error(403, { message: 'Returning can only be confirmed by a librarian at the library.' });
 };
 
 // GET /api/books/transaction?user=username or ?userId=123
-export const GET: RequestHandler = async ({ url, request }) => {
+export const GET: RequestHandler = async ({ url, request, cookies }) => {
   const username = url.searchParams.get('user');
   const userIdParam = url.searchParams.get('userId');
-
-  // If no explicit params provided, try to authenticate the request and use token user
-  let userRow: { id: number } | undefined;
-  if (!username && !userIdParam) {
-    const authUser = await authenticateUser(request as Request);
-    if (authUser && authUser.id) {
-      userRow = { id: authUser.id } as any;
-    } else {
-      return error(400, { message: 'Missing user or userId parameter' });
-    }
-  } else {
-    // Find user by username or userId
-    if (username) {
-      [userRow] = await db.select({ id: tbl_user.id }).from(tbl_user).where(eq(tbl_user.username, username)).limit(1);
-    } else if (userIdParam) {
-      [userRow] = await db.select({ id: tbl_user.id }).from(tbl_user).where(eq(tbl_user.id, Number(userIdParam))).limit(1);
-    }
+  const authenticatedUser = await authenticateClientRequest(request, cookies.get('client_token'));
+  if (!authenticatedUser) return error(401, { message: 'Unauthorized' });
+  if (userIdParam && Number(userIdParam) !== authenticatedUser.id) {
+    return error(403, { message: 'You cannot view another user\'s requests' });
   }
-
-  if (!userRow) {
-    return error(404, { message: 'User not found' });
+  if (username && username !== authenticatedUser.username) {
+    return error(403, { message: 'You cannot view another user\'s requests' });
   }
+  const userRow = { id: authenticatedUser.id };
 
   // itemType support for GET status queries
   const typeParam = url.searchParams.get('itemType') || 'book';

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { onDestroy } from 'svelte';
+  import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, Check, ChevronDown, Eye, EyeOff, Info, Lock, Mail, Phone, RefreshCw, ShieldCheck, User } from '@lucide/svelte';
 
   let formData = {
     name: '',

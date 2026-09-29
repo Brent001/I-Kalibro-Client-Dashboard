@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
         
         if (!userId) {
             console.warn('Token missing user ID');
-            cookies.delete('token', { path: '/' });
+            cookies.delete('client_token', { path: '/' });
             throw redirect(302, '/');
         }
 
@@ -42,7 +42,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
 
         if (!userRow || !userRow.isActive) {
             console.warn('User not found or inactive:', userId);
-            cookies.delete('token', { path: '/' });
+            cookies.delete('client_token', { path: '/' });
             throw redirect(302, '/');
         }
 
@@ -61,7 +61,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
         // Token is invalid or expired
         if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
             console.warn('Invalid or expired token:', error.message);
-            cookies.delete('token', { path: '/' });
+            cookies.delete('client_token', { path: '/' });
             throw redirect(302, '/');
         }
         
@@ -69,7 +69,7 @@ export const load: PageServerLoad = async ({ cookies, url }) => {
         console.error('Dashboard auth check error:', error);
         
         // Still redirect to login on any auth error
-        cookies.delete('token', { path: '/' });
+        cookies.delete('client_token', { path: '/' });
         throw redirect(302, '/');
     }
 };

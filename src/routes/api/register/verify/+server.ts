@@ -73,7 +73,13 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    // OTP verified, delete from Redis
+    const remainingSeconds = Math.ceil((stored.expiresAt - Date.now()) / 1000);
+    if (remainingSeconds < 1) {
+      await redisClient.del(key);
+      return json({ success: false, message: 'OTP has expired. Please request a new one.' }, { status: 400 });
+    }
+
+    await redisClient.setex(`otp:register:verified:${normalizedEmail}`, remainingSeconds, '1');
     await redisClient.del(key);
 
     return json({ success: true, message: 'OTP verified successfully' });

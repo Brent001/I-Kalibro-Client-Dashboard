@@ -13,7 +13,7 @@ import {
   tbl_user
 } from '$lib/server/db/schema/schema.js';
 import jwt from 'jsonwebtoken';
-import { eq, and } from 'drizzle-orm';
+import { desc, eq, and } from 'drizzle-orm';
 import { env } from '$env/dynamic/private';
 
 const JWT_SECRET = env.JWT_SECRET || process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
@@ -36,7 +36,11 @@ async function authenticateStaff(request: Request) {
     if (!userId) return null;
 
     // very small check: ensure user exists (permission checks can be added later)
-    const [userRow] = await db.select({ id: tbl_user.id, userType: tbl_user.userType }).from(tbl_user).where(eq(tbl_user.id, userId)).limit(1);
+    const [userRow] = await db
+      .select({ id: tbl_user.id, userType: tbl_user.userType })
+      .from(tbl_user)
+      .where(and(eq(tbl_user.id, userId), eq(tbl_user.isActive, true)))
+      .limit(1);
     if (!userRow) return null;
     if (!['staff', 'admin'].includes(userRow.userType || '')) return null;
     return userRow;
@@ -60,7 +64,7 @@ export const GET: RequestHandler = async ({ url, request }) => {
           id: tbl_book_reservation.id,
           itemId: tbl_book.id,
           itemTitle: tbl_book.title,
-          reservedDate: tbl_book_reservation.reservationDate,
+          reservedDate: tbl_book_reservation.requestDate,
           userId: tbl_user.id,
           userName: tbl_user.name,
           status: tbl_book_reservation.status
@@ -69,7 +73,7 @@ export const GET: RequestHandler = async ({ url, request }) => {
         .leftJoin(tbl_book, eq(tbl_book_reservation.bookId, tbl_book.id))
         .leftJoin(tbl_user, eq(tbl_book_reservation.userId, tbl_user.id))
         .where(and(eq(tbl_book_reservation.status, 'borrow_request')))
-        .orderBy(tbl_book_reservation.createdAt || tbl_book_reservation.reservationDate);
+        .orderBy(desc(tbl_book_reservation.createdAt));
     } else if (itemType === 'magazine') {
       rows = await db
         .select({
@@ -85,7 +89,7 @@ export const GET: RequestHandler = async ({ url, request }) => {
         .leftJoin(tbl_magazine, eq(tbl_magazine_reservation.magazineId, tbl_magazine.id))
         .leftJoin(tbl_user, eq(tbl_magazine_reservation.userId, tbl_user.id))
         .where(and(eq(tbl_magazine_reservation.status, 'borrow_request')))
-        .orderBy(tbl_magazine_reservation.createdAt || tbl_magazine_reservation.requestDate);
+        .orderBy(desc(tbl_magazine_reservation.createdAt));
     } else if (itemType === 'thesis') {
       rows = await db
         .select({
@@ -101,7 +105,7 @@ export const GET: RequestHandler = async ({ url, request }) => {
         .leftJoin(tbl_thesis, eq(tbl_thesis_reservation.thesisId, tbl_thesis.id))
         .leftJoin(tbl_user, eq(tbl_thesis_reservation.userId, tbl_user.id))
         .where(and(eq(tbl_thesis_reservation.status, 'borrow_request')))
-        .orderBy(tbl_thesis_reservation.createdAt || tbl_thesis_reservation.requestDate);
+        .orderBy(desc(tbl_thesis_reservation.createdAt));
     } else if (itemType === 'journal') {
       rows = await db
         .select({
@@ -117,7 +121,7 @@ export const GET: RequestHandler = async ({ url, request }) => {
         .leftJoin(tbl_journal, eq(tbl_journal_reservation.journalId, tbl_journal.id))
         .leftJoin(tbl_user, eq(tbl_journal_reservation.userId, tbl_user.id))
         .where(and(eq(tbl_journal_reservation.status, 'borrow_request')))
-        .orderBy(tbl_journal_reservation.createdAt || tbl_journal_reservation.requestDate);
+        .orderBy(desc(tbl_journal_reservation.createdAt));
     } else {
       return error(400, { message: 'Unsupported itemType' });
     }

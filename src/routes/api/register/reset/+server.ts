@@ -1,6 +1,5 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import bcrypt from 'bcrypt';
 import { db } from '$lib/server/db/index.js';
 import { tbl_user } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
@@ -100,24 +99,12 @@ export const POST: RequestHandler = async ({ request }) => {
       }, { status: 409 });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create new user
-    await db.insert(tbl_user).values({
-      email: normalizedEmail,
-      password: hashedPassword,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
-
-    // Delete OTP from Redis after successful registration
+    // This legacy endpoint cannot create a valid account without the verified registration form fields.
     await redisClient.del(key);
-
     return json({
-      success: true,
-      message: 'Registration successful. You can now log in.'
-    });
+      success: false,
+      message: 'This registration endpoint is retired. Use the verified registration form.'
+    }, { status: 410 });
   } catch (error) {
     return json({
       success: false,

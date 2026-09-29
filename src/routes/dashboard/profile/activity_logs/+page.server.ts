@@ -1,39 +1,32 @@
 import type { PageServerLoad } from './$types.js';
 import { redirect } from '@sveltejs/kit';
-import jwt from 'jsonwebtoken';
+import { authenticateClientRequest } from '$lib/server/utils/clientAuth.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
-
-export const load: PageServerLoad = async ({ cookies, fetch }) => {
+export const load: PageServerLoad = async ({ cookies, fetch, request }) => {
     const token = cookies.get('client_token');
-    if (!token) throw redirect(302, '/');
+    const user = await authenticateClientRequest(request, token);
+    if (!user) {
+        cookies.delete('client_token', { path: '/' });
+        throw redirect(302, '/');
+    }
 
     try {
-        const decoded = jwt.verify(token, JWT_SECRET) as any;
-        const userId = decoded.userId || decoded.id;
-        if (!userId) {
-            cookies.delete('client_token', { path: '/' });
-            throw redirect(302, '/');
-        }
-
-        const res = await fetch('/api/profile/activity_logs', {
+        const response = await fetch('/api/profile/activity_logs?limit=1000', {
             headers: { authorization: `Bearer ${token}` }
         });
-
-        if (!res.ok) throw redirect(302, '/dashboard/profile');
-        const data = await res.json();
-        if (!data.success) throw redirect(302, '/dashboard/profile');
+        if (!response.ok) throw new Error('Unable to load activity logs');
+        const result = await response.json();
+        if (!result.success) throw new Error('Unable to load activity logs');
 
         return {
-            logs: data.logs || []
+            logs: result.logs || [],
+            loadError: ''
         };
-    } catch (error) {
-        if (
-            error instanceof jwt.JsonWebTokenError ||
-            error instanceof jwt.TokenExpiredError
-        ) {
-            cookies.delete('client_token', { path: '/' });
-        }
-        throw redirect(302, '/');
+    } catch (cause) {
+        console.error('Failed to load activity logs:', cause);
+        return {
+            logs: [],
+            loadError: 'Activity logs could not be loaded. Retry to check again.'
+        };
     }
 };

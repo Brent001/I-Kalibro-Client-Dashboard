@@ -5,7 +5,24 @@
   import { browser } from "$app/environment";
   import { writable, get } from "svelte/store";
   import NotificationContainer from "./notificationContainer.svelte";
-  import { notifications } from "$lib/stores/notificationStore.js";
+  import { notifications, persistedNotifications } from "$lib/stores/notificationStore.js";
+  import {
+    Bell,
+    BookOpen,
+    Bookmark,
+    CircleDollarSign,
+    FileSearch,
+    History,
+    Home,
+    Menu,
+    Newspaper,
+    QrCode,
+    ScrollText,
+    Search,
+    Sparkles,
+    UserCircle,
+    X
+  } from '@lucide/svelte';
 
   export let onLogout: () => void = () => {};
   
@@ -44,6 +61,7 @@
   $: user = $userStore;
   $: isLoadingUser = $isLoadingStore;
   $: sessionError = $sessionErrorStore;
+  $: unreadServerCount = $persistedNotifications.filter((notification) => !notification.isRead).length;
 
   const navigation = [
     {
@@ -103,6 +121,27 @@
       description: "Issued books"
     },
     {
+      name: "History",
+      href: "/dashboard/history",
+      roles: ["student", "faculty"],
+      icon: `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25a9.75 9.75 0 1 0 9.75 9.75A9.76 9.76 0 0 0 12 2.25Zm.75 4.5a.75.75 0 0 0-1.5 0v5.56l3.22 2.148a.75.75 0 1 0 .832-1.248l-2.552-1.702V6.75Z" clip-rule="evenodd"/></svg>`,
+      description: "Borrowing records"
+    },
+    {
+      name: "Fine Status",
+      href: "/dashboard/fines",
+      roles: ["student", "faculty"],
+      icon: `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 2.25a9.75 9.75 0 1 0 0 19.5 9.75 9.75 0 0 0 0-19.5ZM12 6a.75.75 0 0 1 .75.75v.47a3 3 0 0 1 1.94 1.12.75.75 0 1 1-1.18.92 1.5 1.5 0 0 0-1.19-.58h-.64a1.18 1.18 0 0 0-.34 2.31l1.7.49a2.68 2.68 0 0 1-.29 5.2v.58a.75.75 0 0 1-1.5 0v-.6a3.01 3.01 0 0 1-2.02-1.32.75.75 0 1 1 1.24-.84c.29.43.77.68 1.29.68h.57a1.18 1.18 0 0 0 .33-2.31l-1.7-.49a2.68 2.68 0 0 1 .29-5.2v-.43A.75.75 0 0 1 12 6Z" clip-rule="evenodd"/></svg>`,
+      description: "Recorded charges"
+    },
+    {
+      name: "Notifications",
+      href: "/dashboard/notifications",
+      roles: ["student", "faculty"],
+      icon: `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M5.25 9a6.75 6.75 0 0 1 13.5 0v.75c0 2.39.83 4.58 2.22 6.32.3.38.03.93-.46.93H3.49c-.49 0-.76-.55-.46-.93a10.2 10.2 0 0 0 2.22-6.32V9ZM9 18.5a3 3 0 0 0 6 0H9Z" clip-rule="evenodd"/></svg>`,
+      description: "Account updates"
+    },
+    {
       name: "QR View",
       href: "/dashboard/qr_view",
       roles: ["student", "faculty"],
@@ -119,6 +158,25 @@
       description: "Account settings"
     }
   ];
+
+  const navigationIcons: Record<string, typeof Home> = {
+    Home,
+    Books: BookOpen,
+    Magazines: Newspaper,
+    'Research Docs': FileSearch,
+    Journal: ScrollText,
+    'New Arrivals': Sparkles,
+    'My Books': Bookmark,
+    History,
+    'Fine Status': CircleDollarSign,
+    Notifications: Bell,
+    'QR View': QrCode,
+    Profile: UserCircle
+  };
+
+  function navigationIcon(name: string) {
+    return navigationIcons[name] ?? Home;
+  }
 
   $: visibleNavigation = (() => {
     const userType = (user && user.userType) ? String(user.userType).toLowerCase() : 'guest';
@@ -234,11 +292,20 @@
     return str.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   }
 
-  function getUserInitials(): string {
-    if (!user) return 'G';
-    const name = user.name || user.username || 'Guest';
-    return name.charAt(0).toUpperCase();
+  function getUserInitials(displayName: string): string {
+    const name = displayName.trim();
+    if (!name || name === 'User') return 'U';
+    const words = name.split(/\s+/).filter(Boolean);
+    if (words.length > 1) return `${words[0][0]}${words[words.length - 1][0]}`.toUpperCase();
+    return name.slice(0, 2).toUpperCase();
   }
+
+  function getDisplayUsername(currentUser: UserType): string {
+    return currentUser?.username?.trim() || 'User';
+  }
+
+  $: displayUsername = getDisplayUsername(user);
+  $: displayInitials = getUserInitials(displayUsername);
 </script>
 
 <div class="flex h-screen bg-gradient-to-br from-[#E8F5E9] via-[#F5F5DC] to-[#FFF8E1]">
@@ -296,11 +363,14 @@
           {#if activeNavHref === item.href}
             <span class="absolute left-0 inset-y-2 w-[3px] bg-[#E8B923] rounded-r-full"></span>
           {/if}
-          <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-all
+          <div class="relative w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-all
             {activeNavHref === item.href
               ? 'bg-white/15 text-[#E8B923]'
               : 'bg-slate-100 text-slate-500 group-hover:bg-[#D9F0E1] group-hover:text-[#0D5C29]'}">
-            {@html item.icon}
+            <svelte:component this={navigationIcon(item.name)} class="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
+            {#if item.name === 'Notifications' && unreadServerCount > 0}
+              <span class="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[#E8B923] ring-2 ring-white" aria-label="Unread notifications"></span>
+            {/if}
           </div>
           <div class="flex-1 min-w-0">
             <p class="font-semibold text-[14px] leading-none truncate">{item.name}</p>
@@ -323,10 +393,10 @@
     <div class="p-3 flex-shrink-0">
       <div class="flex items-center gap-2.5 px-2 py-2 mb-2 rounded-lg bg-gradient-to-r from-[#F0FAF3] to-[#FAFFF6] border border-[#C8E6C9]">
         <div class="w-8 h-8 rounded-full bg-gradient-to-br from-[#0D5C29] to-[#4A7C59] text-white flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-sm ring-2 ring-[#C8E6C9]">
-          {getUserInitials()}
+          {displayInitials}
         </div>
         <div class="flex-1 min-w-0">
-          <p class="text-[13px] font-semibold text-slate-800 truncate leading-none">{user?.username || 'User'}</p>
+          <p class="text-[13px] font-semibold text-slate-800 truncate leading-none">{displayUsername}</p>
           <div class="flex items-center gap-1 mt-0.5">
             <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full flex-shrink-0"></span>
             <p class="text-[10px] text-slate-500 truncate">{capitalize(user?.userType || 'guest')}</p>
@@ -393,11 +463,11 @@
           <!-- Dynamic icon: matches the active page's sidebar icon -->
           <div class="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-[#0D5C29] to-[#4A7C59] rounded-lg flex items-center justify-center border-2 border-[#E8B923]/40 shadow-sm shrink-0
                       [&_svg]:w-4 [&_svg]:h-4 [&_svg]:text-[#E8B923] [&_svg]:fill-[#E8B923]">
-            {@html activePageIcon}
+            <svelte:component this={navigationIcon(pageTitle)} class="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
           </div>
           <div class="min-w-0">
             <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-none truncate">{pageTitle}</h1>
-            <p class="text-[11px] sm:text-sm text-slate-500 mt-0.5 truncate">Welcome back, {user?.username || 'User'}</p>
+            <p class="text-[11px] sm:text-sm text-slate-500 mt-0.5 truncate">Welcome back, {displayUsername}</p>
           </div>
         </div>
       </div>
@@ -413,11 +483,7 @@
             <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7C18 6.279 15.464 4 12.25 4s-5.75 2.279-5.75 5.05v.7a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/>
             </svg>
-            {#if $notifications.length > 0}
-              <span class="absolute -top-0.5 -right-0.5 h-4 w-4 bg-gradient-to-br from-[#E8B923] to-[#B8860B] text-white text-[10px] rounded-full flex items-center justify-center font-bold shadow ring-2 ring-white">
-                {$notifications.length > 9 ? '9+' : $notifications.length}
-              </span>
-            {:else}
+            {#if unreadServerCount > 0}
               <span class="absolute top-1.5 right-1.5 h-2 w-2 bg-[#E8B923] rounded-full ring-2 ring-white"></span>
             {/if}
           </button>
@@ -435,7 +501,7 @@
                   {#if $notifications.length > 0}
                     <button on:click={() => notifications.clear()} class="text-xs text-white/70 hover:text-white underline">Clear all</button>
                   {/if}
-                  <button on:click={() => showNotificationPanel = false} class="text-white/70 hover:text-white hover:bg-white/20 rounded p-1 transition-colors">
+                  <button aria-label="Close notifications" on:click={() => showNotificationPanel = false} class="text-white/70 hover:text-white hover:bg-white/20 rounded p-1 transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                   </button>
                 </div>
@@ -471,7 +537,7 @@
                               {/if}
                             </div>
                           </div>
-                          <button on:click={() => notifications.remove(notification.id)} class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 rounded p-1 transition-all flex-shrink-0">
+                          <button aria-label="Dismiss notification" on:click={() => notifications.remove(notification.id)} class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 rounded p-1 transition-all flex-shrink-0">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                           </button>
                         </div>
@@ -487,9 +553,12 @@
         <!-- User avatar chip -->
         <div class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-2 rounded-lg bg-white border border-slate-200 shadow-sm">
           <div class="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-[#0D5C29] to-[#4A7C59] text-white rounded-full flex items-center justify-center font-bold text-xs shrink-0">
-            {getUserInitials()}
+            {displayInitials}
           </div>
-          <span class="text-xs sm:text-sm font-semibold text-slate-700 hidden sm:block">{user?.username || 'User'}</span>
+          <span class="hidden min-w-0 sm:block">
+            <span class="block truncate text-xs font-semibold text-slate-700">{displayUsername}</span>
+            <span class="block truncate text-[10px] text-slate-500">{capitalize(user?.userType || 'guest')}</span>
+          </span>
         </div>
       </div>
     </header>

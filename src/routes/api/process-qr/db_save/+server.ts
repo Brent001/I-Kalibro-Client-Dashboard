@@ -1,22 +1,16 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
-import jwt from 'jsonwebtoken';
 import { db } from '$lib/server/db/index.js';
 import { tbl_user, tbl_library_visit } from '$lib/server/db/schema/schema.js';
 import { eq, and, isNull, desc } from 'drizzle-orm';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+import { logUserActivity } from '$lib/server/db/activity.js';
+import { authenticateClientRequest } from '$lib/server/utils/clientAuth.js';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
   try {
-    // Verify authentication
-    const token = cookies.get('client_token');
-    if (!token) {
-      return json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const userId = decoded.userId || decoded.id;
+    const authenticatedUser = await authenticateClientRequest(request, cookies.get('client_token'));
+    if (!authenticatedUser) return json({ error: 'Unauthorized' }, { status: 401 });
+    const userId = authenticatedUser.id;
 
     // Verify user exists and is active
     const [userRow] = await db
@@ -32,9 +26,8 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     // Parse request body
     const body = await request.json();
     const action = body.action; // 'time_in' or 'time_out'
-    const username = body.username || userRow.username;
-    const fullName = body.fullName || userRow.name;
-    const visitorType = body.visitorType || userRow.role || 'user';
+    const fullName = userRow.name;
+    const visitorType = userRow.userType || 'user';
     const purpose = body.purpose || ''; // Only for time_in
 
     if (!action || (action !== 'time_in' && action !== 'time_out')) {
@@ -44,7 +37,6 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
     // Handle TIME IN
     if (action === 'time_in') {
       // Check for recent time-in entries to prevent duplicates
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
       const recentEntry = await db
         .select()
         .from(tbl_library_visit)
@@ -79,6 +71,14 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       }).returning({
         id: tbl_library_visit.id,
         timeIn: tbl_library_visit.timeIn
+      });
+
+      await logUserActivity({
+        userId: userRow.id,
+        activityType: 'library_visit_in',
+        itemType: 'library_visit',
+        itemId: newVisit.id,
+        details: purpose ? `Checked in: ${purpose}` : 'Checked in at the library'
       });
 
       return json({
@@ -118,6 +118,14 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
         .set({ timeOut: timeOutTimestamp })
         .where(eq(tbl_library_visit.id, activeVisit.id));
 
+      await logUserActivity({
+        userId: userRow.id,
+        activityType: 'library_visit_out',
+        itemType: 'library_visit',
+        itemId: activeVisit.id,
+        details: 'Checked out of the library'
+      });
+
       return json({
         success: true,
         action: 'time_out',
@@ -127,14 +135,11 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
         timeIn: activeVisit.timeIn.toISOString()
       });
     }
+
+    return json({ error: 'Invalid action. Must be "time_in" or "time_out"' }, { status: 400 });
     
   } catch (error) {
     console.error('Library visit save API error:', error);
-    
-    // Handle JWT errors
-    if (error instanceof jwt.JsonWebTokenError || error instanceof jwt.TokenExpiredError) {
-      return json({ error: 'Invalid or expired token' }, { status: 401 });
-    }
     
     // Handle database constraint errors
     if (error instanceof Error && error.message.includes('UNIQUE constraint')) {

@@ -1,5 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
+import { randomInt } from 'node:crypto';
 import { Resend } from 'resend';
 import { env } from '$env/dynamic/private';
 import { db } from '$lib/server/db/index.js';
@@ -8,7 +9,7 @@ import { eq } from 'drizzle-orm';
 import { redisClient } from '$lib/server/db/cache.js';
 
 function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 async function checkRateLimit(identifier: string): Promise<boolean> {
@@ -42,7 +43,7 @@ async function checkRateLimit(identifier: string): Promise<boolean> {
   return true;
 }
 
-const resend = new Resend(env.VITE_RESEND_API_KEY);
+const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
 function buildOTPEmail(otp: string): string {
   return `<!DOCTYPE html>
@@ -242,6 +243,10 @@ export const POST: RequestHandler = async ({ request }) => {
       }, { status: 409 });
     }
 
+    if (!resend) {
+      return json({ success: false, message: 'Email service is not configured' }, { status: 503 });
+    }
+
     // Check rate limit
     if (!(await checkRateLimit(normalizedEmail))) {
       return json(
@@ -251,6 +256,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     const key = `otp:register:${normalizedEmail}`;
+    await redisClient.del(`otp:register:verified:${normalizedEmail}`);
 
     // Delete old OTP if exists
     const existingOTP = await redisClient.get(key);

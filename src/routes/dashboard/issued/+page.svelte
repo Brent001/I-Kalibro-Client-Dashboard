@@ -116,8 +116,8 @@
     loading = true;
     try {
       await apiCall('/api/books/transaction/cancel_reserve', 'POST', {
-        bookId: reservation.bookId,
-        userId: currentUser.id,
+        itemId: reservation.bookId,
+        itemType: reservation.itemType || 'book'
       });
       reservedBooks = reservedBooks.filter(r => r.id !== id);
     } catch (err) {
@@ -160,7 +160,9 @@
   });
 
   onDestroy(() => {
-    window.removeEventListener('resize', checkWidth);
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('resize', checkWidth);
+    }
   });
 </script>
 

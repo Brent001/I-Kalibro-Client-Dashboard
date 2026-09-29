@@ -1,6 +1,25 @@
 <script lang="ts">
   import { page } from '$app/stores';
   import { invalidateAll } from '$app/navigation';
+  import {
+    Building2,
+    BookOpen,
+    Check,
+    CircleCheck,
+    Eye,
+    EyeOff,
+    History,
+    Info,
+    KeyRound,
+    LifeBuoy,
+    LoaderCircle,
+    Lock,
+    Mail,
+    Phone,
+    SquarePen,
+    TriangleAlert,
+    User as UserIcon
+  } from '@lucide/svelte';
 
   // ── Types ──────────────────────────────────────────
   type User = {
@@ -137,7 +156,7 @@
   <!-- ── SUCCESS TOAST ────────────────────────────── -->
   {#if saveSuccess}
     <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium bg-green-50 text-green-800 border border-green-200">
-      <svg class="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25z" clip-rule="evenodd"/></svg>
+      <CircleCheck class="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
       Profile updated successfully.
     </div>
   {/if}
@@ -175,22 +194,22 @@
           class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-600 transition-all"
         >
           {#if showSensitive}
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"/></svg>
+            <EyeOff class="w-3 h-3" aria-hidden="true" />
             Hide
           {:else}
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <Eye class="w-3 h-3" aria-hidden="true" />
             Reveal
           {/if}
         </button>
         {#if !editing}
           <button on:click={openEdit}
             class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#0D5C29] text-white text-[11px] font-bold hover:bg-[#0a4d23] transition-all">
-            <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-8.4 8.4a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32l8.4-8.4z"/><path d="M5.25 5.25a3 3 0 00-3 3v10.5a3 3 0 003 3h10.5a3 3 0 003-3V13.5a.75.75 0 00-1.5 0v5.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5V8.25a1.5 1.5 0 011.5-1.5h5.25a.75.75 0 000-1.5H5.25z"/></svg>
+            <SquarePen class="w-3 h-3" aria-hidden="true" />
             Edit
           </button>
         {/if}
         <a href="/dashboard/profile/activity_logs" class="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-600 transition-all">
-          <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c-1.1 0-2 .9-2 2v4h-2l4 4 4-4h-2v-4c0-1.1-.9-2-2-2z"/></svg>
+          <History class="w-3 h-3" aria-hidden="true" />
           Activity Logs
         </a>
       </div>
@@ -201,21 +220,21 @@
   <div class="grid grid-cols-3 gap-1.5 sm:gap-2">
     <div class="bg-white border border-slate-100 rounded-xl py-3 px-2 sm:py-2.5 flex flex-col items-center justify-center gap-1.5 sm:gap-2 shadow-sm hover:border-slate-300 transition-colors text-center">
       <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#0D5C29] flex items-center justify-center shrink-0">
-        <svg class="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M11.25 4.533A9.707 9.707 0 006 3a9.735 9.735 0 00-3.25.555.75.75 0 00-.5.707v14.25a.75.75 0 001 .707A8.237 8.237 0 016 18.75c1.995 0 3.823.707 5.25 1.886V4.533ZM12.75 20.636A8.214 8.214 0 0118 18.75c.966 0 1.89.166 2.75.47a.75.75 0 001-.708V4.262a.75.75 0 00-.5-.707A9.735 9.735 0 0018 3a9.707 9.707 0 00-5.25 1.533v16.103Z"/></svg>
+        <BookOpen class="w-4 h-4 sm:w-5 sm:h-5 text-white" aria-hidden="true" />
       </div>
       <div class="text-lg sm:text-2xl font-extrabold text-slate-900 leading-none">{stats.totalBorrowedEver}</div>
       <div class="text-xs text-slate-400 font-medium leading-tight">Items Borrowed</div>
     </div>
     <div class="bg-white border border-slate-100 rounded-xl py-3 px-2 sm:py-2.5 flex flex-col items-center justify-center gap-1.5 sm:gap-2 shadow-sm hover:border-slate-300 transition-colors text-center">
       <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#4A7C59] flex items-center justify-center shrink-0">
-        <svg class="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M4.5 2.25a.75.75 0 000 1.5v16.5h-.75a.75.75 0 000 1.5h16.5a.75.75 0 000-1.5h-.75V3.75a.75.75 0 000-1.5h-15zM9 6a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zm-.75 3.75A.75.75 0 019 9h1.5a.75.75 0 010 1.5H9a.75.75 0 01-.75-.75zM9 12a.75.75 0 000 1.5h1.5a.75.75 0 000-1.5H9zm3.75-5.25A.75.75 0 0113.5 6H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zm.75 2.25a.75.75 0 000 1.5H15a.75.75 0 000-1.5h-1.5zm-.75 3.75A.75.75 0 0113.5 12H15a.75.75 0 010 1.5h-1.5a.75.75 0 01-.75-.75zM9 19.5v-2.25a.75.75 0 01.75-.75h4.5a.75.75 0 01.75.75v2.25a.75.75 0 01-.75.75h-4.5A.75.75 0 019 19.5z" clip-rule="evenodd"/></svg>
+        <Building2 class="w-4 h-4 sm:w-5 sm:h-5 text-white" aria-hidden="true" />
       </div>
       <div class="text-lg sm:text-2xl font-extrabold text-slate-900 leading-none">{stats.libraryVisits}</div>
       <div class="text-xs text-slate-400 font-medium leading-tight">Library Visits</div>
     </div>
     <div class="bg-white border border-slate-100 rounded-xl py-3 px-2 sm:py-2.5 flex flex-col items-center justify-center gap-1.5 sm:gap-2 shadow-sm hover:border-slate-300 transition-colors text-center">
       <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#E8B923] flex items-center justify-center shrink-0">
-        <svg class="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 011.04-.207z" clip-rule="evenodd"/></svg>
+        <Check class="w-4 h-4 sm:w-5 sm:h-5 text-white" aria-hidden="true" />
       </div>
       <div class="text-lg sm:text-2xl font-extrabold text-slate-900 leading-none">{stats.currentlyBorrowed}</div>
       <div class="text-xs text-slate-400 font-medium leading-tight">Currently Borrowed</div>
@@ -232,7 +251,7 @@
 
       {#if saveError}
         <div class="mb-3 flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-red-50 text-red-700 border border-red-200">
-          <svg class="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd"/></svg>
+          <TriangleAlert class="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
           {saveError}
         </div>
       {/if}
@@ -309,7 +328,7 @@
 
       <!-- Read-only note -->
       <p class="text-[10px] text-slate-400 mb-3">
-        <svg class="inline w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm8.706-1.442c1.146-.573 2.437.463 2.126 1.706l-.709 2.836.042-.02a.75.75 0 01.67 1.34l-.04.022c-1.147.573-2.438-.463-2.127-1.706l.71-2.836-.042.02a.75.75 0 11-.671-1.34l.041-.022zM12 9a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd"/></svg>
+        <Info class="inline w-3 h-3 mr-0.5 align-[-2px]" aria-hidden="true" />
         {user.userType === 'student' ? 'Enrollment No.' : 'Faculty No.'} and Username are managed by library administration and cannot be changed here.
       </p>
 
@@ -317,10 +336,10 @@
         <button on:click={saveProfile} disabled={saving}
           class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0D5C29] text-white text-xs font-bold hover:bg-[#0a4d23] disabled:opacity-60 disabled:cursor-not-allowed transition-all">
           {#if saving}
-            <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+            <LoaderCircle class="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
             Saving…
           {:else}
-            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M19.916 4.626a.75.75 0 01.208 1.04l-9 13.5a.75.75 0 01-1.154.114l-6-6a.75.75 0 011.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 011.04-.207z" clip-rule="evenodd"/></svg>
+            <Check class="w-3.5 h-3.5" aria-hidden="true" />
             Save Changes
           {/if}
         </button>
@@ -342,7 +361,7 @@
         <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Contact Information</span>
         {#if !showSensitive}
           <span class="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-            <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clip-rule="evenodd"/></svg>
+            <Lock class="w-2.5 h-2.5" aria-hidden="true" />
             Protected
           </span>
         {/if}
@@ -351,7 +370,7 @@
         <!-- Email -->
         <div class="flex items-center gap-2 px-2 py-2 sm:px-3 sm:py-2.5 bg-slate-50 rounded-lg border border-slate-100">
           <div class="w-7 h-7 rounded-lg bg-[#E3F2FD] flex items-center justify-center shrink-0">
-            <svg class="w-3.5 h-3.5 text-[#1565C0]" fill="currentColor" viewBox="0 0 24 24"><path d="M1.5 8.67v8.58a3 3 0 003 3h15a3 3 0 003-3V8.67l-8.928 5.493a3 3 0 01-3.144 0L1.5 8.67z"/><path d="M22.5 6.908V6.75a3 3 0 00-3-3h-15a3 3 0 00-3 3v.158l9.714 5.978a1.5 1.5 0 001.572 0L22.5 6.908z"/></svg>
+            <Mail class="w-3.5 h-3.5 text-[#1565C0]" aria-hidden="true" />
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-[10px] text-slate-400 font-medium">Email</p>
@@ -363,7 +382,7 @@
         <!-- Phone -->
         <div class="flex items-center gap-2 px-2 py-2 sm:px-3 sm:py-2.5 bg-slate-50 rounded-lg border border-slate-100">
           <div class="w-7 h-7 rounded-lg bg-[#F3E5F5] flex items-center justify-center shrink-0">
-            <svg class="w-3.5 h-3.5 text-[#6A1B9A]" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z" clip-rule="evenodd"/></svg>
+            <Phone class="w-3.5 h-3.5 text-[#6A1B9A]" aria-hidden="true" />
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-[10px] text-slate-400 font-medium">Phone</p>
@@ -375,7 +394,7 @@
         <!-- Username -->
         <div class="flex items-center gap-2 px-2 py-2 sm:px-3 sm:py-2.5 bg-slate-50 rounded-lg border border-slate-100">
           <div class="w-7 h-7 rounded-lg bg-[#E8F5E9] flex items-center justify-center shrink-0">
-            <svg class="w-3.5 h-3.5 text-[#0D5C29]" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM3.751 20.105a8.25 8.25 0 0116.498 0 .75.75 0 01-.437.695A18.683 18.683 0 0112 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 01-.437-.695z" clip-rule="evenodd"/></svg>
+            <UserIcon class="w-3.5 h-3.5 text-[#0D5C29]" aria-hidden="true" />
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-[10px] text-slate-400 font-medium">Username</p>
@@ -407,7 +426,7 @@
               <span class="text-[10px] text-slate-400 font-medium flex items-center gap-1">
                 {f.label}
                 {#if f.locked}
-                  <svg class="w-2.5 h-2.5 text-slate-300" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clip-rule="evenodd"/></svg>
+                  <Lock class="w-2.5 h-2.5 text-slate-300" aria-hidden="true" />
                 {/if}
               </span>
               <span class="text-xs sm:text-sm font-semibold text-slate-800">{f.value || 'N/A'}</span>
@@ -427,7 +446,7 @@
               <span class="text-[10px] text-slate-400 font-medium flex items-center gap-1">
                 {f.label}
                 {#if f.locked}
-                  <svg class="w-2.5 h-2.5 text-slate-300" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clip-rule="evenodd"/></svg>
+                  <Lock class="w-2.5 h-2.5 text-slate-300" aria-hidden="true" />
                 {/if}
               </span>
               <span class="text-xs sm:text-sm font-semibold text-slate-800">{f.value || 'N/A'}</span>
@@ -465,7 +484,7 @@
         <button on:click={openEdit}
           class="flex items-center gap-2.5 px-3 py-3 sm:py-4 rounded-xl border border-slate-100 bg-white text-left transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
           <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 bg-[#0D5C29]">
-            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.157 3.712 3.712 1.157-1.157a2.625 2.625 0 000-3.712zM19.513 8.199l-3.712-3.712-8.4 8.4a5.25 5.25 0 00-1.32 2.214l-.8 2.685a.75.75 0 00.933.933l2.685-.8a5.25 5.25 0 002.214-1.32l8.4-8.4z"/><path d="M5.25 5.25a3 3 0 00-3 3v10.5a3 3 0 003 3h10.5a3 3 0 003-3V13.5a.75.75 0 00-1.5 0v5.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5V8.25a1.5 1.5 0 011.5-1.5h5.25a.75.75 0 000-1.5H5.25z"/></svg>
+            <SquarePen class="w-5 h-5 text-white" aria-hidden="true" />
           </div>
           <div class="min-w-0">
             <p class="text-xs font-semibold text-slate-700 leading-tight">Edit Profile</p>
@@ -474,7 +493,7 @@
         </button>
         <button class="flex items-center gap-2.5 px-3 py-3 sm:py-4 rounded-xl border border-slate-100 bg-white text-left transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
           <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 bg-[#4A7C59]">
-            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clip-rule="evenodd"/></svg>
+            <KeyRound class="w-5 h-5 text-white" aria-hidden="true" />
           </div>
           <div class="min-w-0">
             <p class="text-xs font-semibold text-slate-700 leading-tight">Change Password</p>
@@ -483,7 +502,7 @@
         </button>
         <a href="/help" class="flex items-center gap-2.5 px-3 py-3 sm:py-4 rounded-xl border border-slate-100 bg-white no-underline transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md">
           <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 bg-[#1565C0]">
-            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm11.378-3.917c-.89-.777-2.366-.777-3.255 0a.75.75 0 01-.988-1.129c1.454-1.272 3.776-1.272 5.23 0 1.513 1.324 1.513 3.518 0 4.842a3.75 3.75 0 01-.837.552c-.676.328-1.028.774-1.028 1.152v.75a.75.75 0 01-1.5 0v-.75c0-1.279 1.06-2.107 1.875-2.502.182-.088.351-.199.503-.331.83-.727.83-1.857 0-2.584zM12 18a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd"/></svg>
+            <LifeBuoy class="w-5 h-5 text-white" aria-hidden="true" />
           </div>
           <div class="min-w-0">
             <p class="text-xs font-semibold text-slate-700 leading-tight">Help & Support</p>

@@ -4,6 +4,8 @@ import { db } from '$lib/server/db/index.js';
 import { tbl_user, tbl_student, tbl_faculty } from '$lib/server/db/schema/schema.js';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcrypt';
+import { redisClient } from '$lib/server/db/cache.js';
+import { logUserActivity } from '$lib/server/db/activity.js';
 
 // POST: Client Create Account (Student or Faculty)
 export const POST: RequestHandler = async ({ request }) => {
@@ -40,6 +42,12 @@ export const POST: RequestHandler = async ({ request }) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(body.email)) {
       return json({ success: false, message: 'Invalid email format' }, { status: 400 });
+    }
+
+    const normalizedEmail = body.email.trim().toLowerCase();
+    const verification = await redisClient.get(`otp:register:verified:${normalizedEmail}`);
+    if (verification !== '1') {
+      return json({ success: false, message: 'Verify your email before creating an account' }, { status: 403 });
     }
 
     // Username validation
@@ -85,7 +93,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // Check for duplicate email
-    const emailExists = await db.select({ id: tbl_user.id }).from(tbl_user).where(eq(tbl_user.email, body.email.toLowerCase())).limit(1);
+    const emailExists = await db.select({ id: tbl_user.id }).from(tbl_user).where(eq(tbl_user.email, normalizedEmail)).limit(1);
     if (emailExists.length > 0) {
       return json({ success: false, message: 'Email address is already registered' }, { status: 409 });
     }
@@ -119,12 +127,12 @@ export const POST: RequestHandler = async ({ request }) => {
     // Insert into user table
     const [newUser] = await db.insert(tbl_user).values({
       name: body.name.trim(),
-      email: body.email.toLowerCase().trim(),
+      email: normalizedEmail,
       phone: body.phone?.trim() || null,
       username: body.username.toLowerCase().trim(),
       password: hashedPassword,
       userType: userRole,
-      isActive: true,
+      isActive: false,
       createdAt: new Date(),
       updatedAt: new Date()
     }).returning({
@@ -158,6 +166,14 @@ export const POST: RequestHandler = async ({ request }) => {
         gender: body.gender || null
       });
     }
+
+    await redisClient.del(`otp:register:verified:${normalizedEmail}`);
+
+    await logUserActivity({
+      userId: newUser.id,
+      activityType: 'account_created',
+      details: 'Created a client account'
+    });
 
     // Return success response with user data
     return json({

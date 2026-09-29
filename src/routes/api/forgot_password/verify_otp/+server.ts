@@ -6,8 +6,6 @@ export const POST: RequestHandler = async ({ request }) => {
   try {
     const { email, otp } = await request.json();
 
-    console.log(`[Verify OTP] Request received - email: ${email}, otp: ${otp}`);
-
     if (!email || !otp) {
       return json({ success: false, message: 'Email and OTP are required' }, { status: 400 });
     }
@@ -16,14 +14,10 @@ export const POST: RequestHandler = async ({ request }) => {
     const normalizedOTP = otp.trim();
     const key = `otp:${normalizedEmail}`;
     
-    console.log(`[Verify OTP] Looking up key: ${key}`);
-
     // Get OTP data from Redis
     const storedRaw = await redisClient.get(key);
-    console.log(`[Verify OTP] Raw data from Redis:`, storedRaw);
 
     if (!storedRaw) {
-      console.log(`[Verify OTP] No OTP found in Redis for key: ${key}`);
       return json({ 
         success: false, 
         message: 'OTP not found or expired. Please request a new one.' 
@@ -33,9 +27,7 @@ export const POST: RequestHandler = async ({ request }) => {
     let stored;
     try {
       stored = JSON.parse(storedRaw);
-      console.log(`[Verify OTP] Parsed OTP data:`, stored);
     } catch (parseError) {
-      console.error(`[Verify OTP] Failed to parse Redis data:`, parseError);
       await redisClient.del(key);
       return json({ 
         success: false, 
@@ -45,7 +37,6 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Check if OTP has expired
     if (Date.now() > stored.expiresAt) {
-      console.log(`[Verify OTP] OTP expired - Current: ${Date.now()}, Expires: ${stored.expiresAt}`);
       await redisClient.del(key);
       return json({ 
         success: false, 
@@ -55,7 +46,6 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Check if too many failed attempts
     if (stored.attempts >= 5) {
-      console.log(`[Verify OTP] Too many attempts: ${stored.attempts}`);
       await redisClient.del(key);
       return json(
         { success: false, message: 'Too many failed attempts. Please request a new OTP.' },
@@ -68,13 +58,10 @@ export const POST: RequestHandler = async ({ request }) => {
       stored.attempts = (stored.attempts || 0) + 1;
       const remainingAttempts = 5 - stored.attempts;
       
-      console.log(`[Verify OTP] Invalid OTP - Expected: ${stored.otp}, Got: ${normalizedOTP}, Attempts: ${stored.attempts}, Remaining: ${remainingAttempts}`);
-      
       // Update attempts in Redis
       const ttl = Math.ceil((stored.expiresAt - Date.now()) / 1000);
       if (ttl > 0) {
         await redisClient.setex(key, ttl, JSON.stringify(stored));
-        console.log(`[Verify OTP] Updated attempts in Redis`);
       }
       
       return json(
@@ -86,8 +73,6 @@ export const POST: RequestHandler = async ({ request }) => {
       );
     }
 
-    console.log(`[Verify OTP] OTP verified successfully for ${email}`);
-    
     // Don't delete the OTP yet - we need it for the password reset
     // It will be deleted after password reset is complete
     

@@ -2,6 +2,48 @@ import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types.js';
 import { downloadFileFromB2, getFileMetadataFromB2, buildResponseHeaders } from '$lib/server/utils/backblazeDownload.js';
 
+const COVER_PREFIXES = ['covers/', 'books/covers/', 'journals/covers/', 'magazines/covers/', 'theses/covers/'];
+const IMAGE_TYPES: Record<string, string> = {
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    jfif: 'image/jpeg',
+    png: 'image/png',
+    gif: 'image/gif',
+    webp: 'image/webp'
+};
+
+function normalizeCoverKey(value: string | undefined): string | null {
+    if (!value) return null;
+    let key = value;
+    for (let pass = 0; pass < 5 && key.includes('%'); pass++) {
+        try {
+            const decoded = decodeURIComponent(key);
+            if (decoded === key) break;
+            key = decoded;
+        } catch {
+            return null;
+        }
+    }
+
+    const segments = key.split('/');
+    if (segments.some((segment) => !segment || segment === '.' || segment === '..' || !/^[A-Za-z0-9._ ()-]+$/.test(segment))) {
+        return null;
+    }
+    if (!COVER_PREFIXES.some((prefix) => key.startsWith(prefix))) return null;
+
+    const extension = segments.at(-1)?.split('.').at(-1)?.toLowerCase();
+    return extension && IMAGE_TYPES[extension] ? key : null;
+}
+
+function detectImageType(body: Uint8Array): string | null {
+    if (body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) return 'image/jpeg';
+    if (body[0] === 0x89 && body[1] === 0x50 && body[2] === 0x4e && body[3] === 0x47 && body[4] === 0x0d && body[5] === 0x0a && body[6] === 0x1a && body[7] === 0x0a) return 'image/png';
+    const signature = new TextDecoder().decode(body.subarray(0, 12));
+    if (signature.startsWith('GIF87a') || signature.startsWith('GIF89a')) return 'image/gif';
+    if (signature.startsWith('RIFF') && signature.slice(8, 12) === 'WEBP') return 'image/webp';
+    return null;
+}
+
 /**
  * GET - Download/view cover photo from Backblaze B2
  * Serves images with proper caching and security headers
@@ -11,55 +53,41 @@ import { downloadFileFromB2, getFileMetadataFromB2, buildResponseHeaders } from 
  *   GET /api/images/cover/covers%2Fbook-123.jpg (URL encoded)
  */
 export const GET: RequestHandler = async ({ params }) => {
-    let fileName: string | undefined = params.fileName;
+    const fileName = normalizeCoverKey(params.fileName);
+    if (!fileName) return error(400, 'Invalid cover path');
+
     try {
-        // Handle URL-encoded paths
-        if (fileName) {
-            fileName = decodeURIComponent(fileName);
-        }
-
-        if (!fileName) {
-            return error(400, 'Missing file name');
-        }
-
-        // Security: Prevent directory traversal
-        if (fileName.includes('..') || fileName.includes('\\')) {
-            return error(400, 'Invalid file path');
-        }
-
-        console.log('Serving cover photo:', fileName);
-
         // Download file from B2
         const fileData = await downloadFileFromB2(fileName);
-        
+        const contentType = detectImageType(fileData.body);
+        if (!contentType) return error(415, 'Unsupported cover image');
+
         const headers = buildResponseHeaders(
-            fileData.contentType,
+            contentType,
             fileData.contentLength,
             fileName,
             true // inline (display in browser)
         );
 
         // Serve the file with proper headers
-        return new Response(fileData.body, {
+        return new Response(Buffer.from(fileData.body), {
             status: 200,
             headers
         });
 
     } catch (err: any) {
-        console.error('Error serving cover photo:', {
-            fileName,
-            error: err?.message,
-            code: err?.code,
-            statusCode: err?.$metadata?.httpStatusCode,
-            fullError: err
-        });
+        if (err?.status) throw err;
+        console.error('Error serving cover photo:', err?.message);
+        if (err?.message?.includes('Missing Backblaze credentials')) {
+            return error(503, 'Cover image storage is not configured');
+        }
 
         // Return proper error based on error type
         if (err.message?.includes('NoSuchKey') || err.$metadata?.httpStatusCode === 404) {
             return error(404, 'Cover photo not found');
         }
 
-        return error(500, `Failed to serve cover photo: ${err.message || 'Unknown error'}`);
+        return error(500, 'Failed to serve cover photo');
     }
 };
 
@@ -68,31 +96,23 @@ export const GET: RequestHandler = async ({ params }) => {
  * Useful for checking if file exists and its properties
  */
 export const HEAD: RequestHandler = async ({ params }) => {
+    const fileName = normalizeCoverKey(params.fileName);
+    if (!fileName) return error(400, 'Invalid cover path');
+
     try {
-        let fileName = params.fileName;
-
-        if (fileName) {
-            fileName = decodeURIComponent(fileName);
-        }
-
-        if (!fileName) {
-            return error(400, 'Missing file name');
-        }
-
-        if (fileName.includes('..') || fileName.includes('\\')) {
-            return error(400, 'Invalid file path');
-        }
-
-        console.log('Checking cover photo metadata:', fileName);
-
         // Use metadata call to avoid downloading entire body for HEAD
         const meta = await getFileMetadataFromB2(fileName);
         if (!meta.exists) {
             return error(404, 'Cover photo not found');
         }
+        const extension = fileName.split('.').at(-1)?.toLowerCase();
+        const contentType = extension ? IMAGE_TYPES[extension] : undefined;
+        if (!contentType || !meta.contentType?.startsWith('image/')) {
+            return error(415, 'Unsupported cover image');
+        }
 
         const headers = buildResponseHeaders(
-            meta.contentType || 'application/octet-stream',
+            contentType,
             meta.contentLength,
             fileName,
             true
@@ -104,7 +124,11 @@ export const HEAD: RequestHandler = async ({ params }) => {
             headers
         });
     } catch (err: any) {
-        console.error('Error checking cover photo:', err);
+        if (err?.status) throw err;
+        console.error('Error checking cover photo:', err?.message);
+        if (err?.message?.includes('Missing Backblaze credentials')) {
+            return error(503, 'Cover image storage is not configured');
+        }
 
         if (err.message?.includes('NoSuchKey') || err.$metadata?.httpStatusCode === 404) {
             return error(404, 'Cover photo not found');
