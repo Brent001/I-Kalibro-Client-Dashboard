@@ -41,7 +41,7 @@
     itemType="print copy"
     catalogId={research.thesisId}
     contributor={research.author}
-    contributorLabel="by"
+      contributorLabel="Authors:"
     category={research.category}
     year={research.publicationYear}
     accent="#17695f"

@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { notifications, persistedNotifications, type PersistedNotification } from '$lib/stores/notificationStore.js';
+  import { isNotificationEnabled, notificationPreferences, notifications, persistedNotifications, type PersistedNotification } from '$lib/stores/notificationStore.js';
   import Notification from './notification.svelte';
 
   let serverNotifications: PersistedNotification[] = [];
   const dismissedIds = new Set<number>();
+  $: visibleServerNotifications = serverNotifications.filter((item) => isNotificationEnabled(item.type, $notificationPreferences));
 
   async function loadServerNotifications() {
     try {
@@ -14,7 +15,7 @@
       const received: PersistedNotification[] = result.data?.notifications ?? [];
       persistedNotifications.set(received);
       const unread = received.filter((item) => !item.isRead && !dismissedIds.has(item.id));
-      serverNotifications = unread.slice(0, 3);
+      serverNotifications = unread;
     } catch {
       // Retain the last successful server state while offline.
     }
@@ -76,7 +77,7 @@
       }}
     />
   {/each}
-  {#each serverNotifications as notification (notification.id)}
+  {#each visibleServerNotifications.slice(0, 3) as notification (notification.id)}
     <Notification
       message={notification.message}
       type={toastType(notification.type)}

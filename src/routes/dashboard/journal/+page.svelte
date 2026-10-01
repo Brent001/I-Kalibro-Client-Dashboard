@@ -4,6 +4,7 @@
   import { replaceState } from '$app/navigation';
   import JournalModal from '$lib/components/ui/JournalModal.svelte';
   import ItemCard from '$lib/components/ui/ItemCard.svelte';
+  import { restrictedActions } from '$lib/stores/restrictionStore.js';
   import {
     getCatalogFillBarStyle as getFillBarStyle,
     getCatalogPageNumbers as getPageNumbers,
@@ -548,9 +549,10 @@
                           {/if}
                         </button>
                       {:else}
-                        <button on:click={() => handleBookAction(book)} disabled={actionLoading || book.availableCopies === 0} type="button"
+                        <button on:click={() => handleBookAction(book)} disabled={actionLoading || book.availableCopies === 0 || $restrictedActions.reserve} type="button"
+                          title={$restrictedActions.reserve ? 'Your account is restricted from making reservations' : undefined}
                           class="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all"
-                          style="{book.availableCopies === 0 ? 'background: #E8DED0; color: #9A8A7A; cursor: not-allowed;' : 'background: #0D5C29; color: #F5F0E8;'}">
+                          style="{book.availableCopies === 0 || $restrictedActions.reserve ? 'background: #E8DED0; color: #9A8A7A; cursor: not-allowed;' : 'background: #0D5C29; color: #F5F0E8;'}">
                           {actionLoading ? '…' : 'Reserve'}
                         </button>
                         <button on:click={() => openBookModal(book)} type="button" aria-label="View"

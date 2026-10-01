@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { restrictedActions } from '$lib/stores/restrictionStore.js';
+
   import { onDestroy, onMount } from 'svelte';
   import { Check, X } from '@lucide/svelte';
 
@@ -54,6 +56,7 @@
     : itemType.charAt(0).toUpperCase() + itemType.slice(1).toLowerCase();
 
   $: isAvailable = availableCopies > 0;
+  $: reservationRestricted = $restrictedActions.reserve;
   $: allOnShelf = totalCopies > 0 && availableCopies >= totalCopies;
   $: tone = !isAvailable ? 'none' : availableCopies <= 2 && !allOnShelf ? 'low' : 'ok';
   $: statusLabel = !isAvailable
@@ -261,13 +264,16 @@
           class:loading={actionLoading}
           type="button"
           on:click={onReserve}
-          disabled={actionLoading || !isAvailable}
+          disabled={actionLoading || !isAvailable || reservationRestricted}
+          title={reservationRestricted ? 'Your account is restricted from making reservations' : undefined}
         >
           {#if actionLoading}
             <span class="spinner" aria-hidden="true"></span>
             Processing…
           {:else if !isAvailable}
             Currently unavailable
+          {:else if reservationRestricted}
+            Reservations restricted
           {:else}
             Reserve {itemType}
           {/if}

@@ -1,5 +1,52 @@
 import { writable } from 'svelte/store';
 
+export type NotificationPreferenceKey = 'due_reminder' | 'overdue' | 'reservation_ready' | 'return_confirmation';
+export type NotificationPreferences = Record<NotificationPreferenceKey, boolean>;
+
+export const defaultNotificationPreferences: NotificationPreferences = {
+  due_reminder: true,
+  overdue: true,
+  reservation_ready: true,
+  return_confirmation: true
+};
+
+export const notificationPreferences = writable<NotificationPreferences>({ ...defaultNotificationPreferences });
+
+function preferencesStorageKey(userId: number | string) {
+  return `client-notification-preferences:${userId}`;
+}
+
+export function loadNotificationPreferences(userId: number | string): NotificationPreferences {
+  let preferences = { ...defaultNotificationPreferences };
+  try {
+    const stored = localStorage.getItem(preferencesStorageKey(userId));
+    if (stored) {
+      const parsed = JSON.parse(stored) as Record<string, unknown>;
+      for (const key of Object.keys(defaultNotificationPreferences) as NotificationPreferenceKey[]) {
+        if (typeof parsed[key] === 'boolean') preferences[key] = parsed[key] as boolean;
+      }
+    }
+  } catch {
+    // Keep defaults when storage is unavailable or contains invalid data.
+  }
+  notificationPreferences.set(preferences);
+  return preferences;
+}
+
+export function saveNotificationPreferences(userId: number | string, preferences: NotificationPreferences): void {
+  const normalized = { ...defaultNotificationPreferences, ...preferences };
+  notificationPreferences.set(normalized);
+  try {
+    localStorage.setItem(preferencesStorageKey(userId), JSON.stringify(normalized));
+  } catch {
+    // Keep the active session preference even if browser storage is unavailable.
+  }
+}
+
+export function isNotificationEnabled(type: string, preferences: NotificationPreferences): boolean {
+  return type in preferences ? preferences[type as NotificationPreferenceKey] : true;
+}
+
 export interface PersistedNotification {
   id: number;
   title: string;

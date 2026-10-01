@@ -5,7 +5,10 @@
   import { browser } from "$app/environment";
   import { writable, get } from "svelte/store";
   import NotificationContainer from "./notificationContainer.svelte";
-  import { notifications, persistedNotifications } from "$lib/stores/notificationStore.js";
+  import ToastContainer from "./toastContainer.svelte";
+  import { notifications, persistedNotifications, notificationPreferences, loadNotificationPreferences, isNotificationEnabled } from "$lib/stores/notificationStore.js";
+  import { userRestrictions } from "$lib/stores/restrictionStore.js";
+  import { toast } from "$lib/stores/toastStore.js";
   import {
     Bell,
     BookOpen,
@@ -72,7 +75,14 @@
   $: user = $userStore;
   $: isLoadingUser = $isLoadingStore;
   $: sessionError = $sessionErrorStore;
-  $: unreadServerCount = $persistedNotifications.filter((notification) => !notification.isRead).length;
+  $: visiblePersistedNotifications = $persistedNotifications.filter((notification) => isNotificationEnabled(notification.type, $notificationPreferences));
+  $: unreadServerCount = visiblePersistedNotifications.filter((notification) => !notification.isRead).length;
+
+  function setUserSession(nextUser: UserType) {
+    userStore.set(nextUser);
+    userRestrictions.set(nextUser?.restrictions ?? []);
+    if (nextUser?.id) loadNotificationPreferences(nextUser.id);
+  }
 
   const navigation = [
     {
@@ -221,10 +231,10 @@
       const response = await fetch('/api/auth/session', { method: 'GET', credentials: 'include', headers: { 'Content-Type': 'application/json' } });
       if (response.ok) {
         const result = await response.json();
-        if (result.success && result.data?.user) userStore.set(result.data.user);
+        if (result.success && result.data?.user) setUserSession(result.data.user);
         else sessionErrorStore.set(true);
       } else if (response.status === 401) {
-        userStore.set(null);
+        setUserSession(null);
         if (browser) await goto('/', { replaceState: true, noScroll: true });
       } else { sessionErrorStore.set(true); }
     } catch { sessionErrorStore.set(true); }
@@ -238,15 +248,15 @@
       const response = await fetch('/api/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ logoutAllDevices: logoutAllDevicesFlag, reason: 'user_logout' }) });
       const result = await response.json();
       if (result.success) {
-        userStore.set(null); onLogout();
-        notifications.show(logoutAllDevicesFlag ? 'Logged out from all devices successfully' : 'Logged out successfully', 'success');
+        setUserSession(null); onLogout();
+        toast.success(logoutAllDevicesFlag ? 'Logged out from all devices successfully' : 'Logged out successfully');
         if (browser) await goto('/', { replaceState: true, noScroll: true });
       } else {
-        notifications.show(result.message || 'Logout completed with some issues', 'warning');
+        toast.warning(result.message || 'Logout completed with some issues');
         if (browser) await goto('/', { replaceState: true, noScroll: true });
       }
     } catch {
-      notifications.show('Network error during logout. Redirecting...', 'error');
+      toast.error('Network error during logout. Redirecting...');
       if (browser) await goto('/', { replaceState: true, noScroll: true });
     } finally { isLoggingOut = false; }
   }
@@ -279,6 +289,24 @@
     if (notification.actionUrl) { showNotificationPanel = false; window.location.href = notification.actionUrl; }
   }
 
+  async function markPersistedNotificationRead(notificationId?: number) {
+    try {
+      const response = await fetch('/api/notifications', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(notificationId ? { notificationId } : { markAll: true })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Unable to update notifications.');
+      persistedNotifications.update((items) => items.map((item) =>
+        notificationId === undefined || item.id === notificationId ? { ...item, isRead: true } : item
+      ));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update notifications.');
+    }
+  }
+
   onMount(() => {
     if (browser) {
       fetchUserSession();
@@ -288,8 +316,12 @@
         try {
           isCheckPending = true;
           const response = await fetch('/api/auth/session', { method: 'GET', credentials: 'include', headers: { 'Content-Type': 'application/json' } });
-          if (response.status === 401) { userStore.set(null); notifications.show('Your session has been revoked. Please log in again.', 'error'); if (browser) await goto('/', { replaceState: true, noScroll: true }); }
-          else if (!response.ok) { userStore.set(null); if (browser) await goto('/', { replaceState: true, noScroll: true }); }
+          if (response.status === 401) { setUserSession(null); toast.error('Your session has been revoked. Please log in again.'); if (browser) await goto('/', { replaceState: true, noScroll: true }); }
+          else if (!response.ok) { setUserSession(null); if (browser) await goto('/', { replaceState: true, noScroll: true }); }
+          else {
+            const result = await response.json();
+            if (result.success && result.data?.user) setUserSession(result.data.user);
+          }
         } catch { console.error('Session check failed'); }
         finally { isCheckPending = false; }
       }, 60000);
@@ -523,8 +555,8 @@
                   <h3 class="text-sm font-bold text-white">Notifications</h3>
                 </div>
                 <div class="flex items-center gap-2">
-                  {#if $notifications.length > 0}
-                    <button on:click={() => notifications.clear()} class="text-xs text-white/70 hover:text-white underline">Clear all</button>
+                  {#if unreadServerCount > 0}
+                    <button on:click={() => markPersistedNotificationRead()} class="text-xs text-white/70 hover:text-white underline">Mark all read</button>
                   {/if}
                   <button aria-label="Close notifications" on:click={() => showNotificationPanel = false} class="text-white/70 hover:text-white hover:bg-white/20 rounded p-1 transition-colors">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -532,7 +564,7 @@
                 </div>
               </div>
               <div class="max-h-96 overflow-y-auto">
-                {#if $notifications.length === 0}
+                {#if visiblePersistedNotifications.length === 0}
                   <div class="p-8 text-center">
                     <div class="w-14 h-14 bg-[#F0FAF3] border-2 border-[#C8E6C9] rounded-full flex items-center justify-center mx-auto mb-3">
                       <svg class="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -544,27 +576,25 @@
                   </div>
                 {:else}
                   <div class="divide-y divide-slate-100">
-                    {#each $notifications as notification (notification.id)}
-                      <div class="p-4 hover:bg-[#F0FAF3] transition-colors cursor-pointer group">
+                    {#each visiblePersistedNotifications as notification (notification.id)}
+                      <div class="p-4 hover:bg-[#F0FAF3] transition-colors group {notification.isRead ? 'opacity-70' : ''}">
                         <div class="flex gap-3">
                           <div class="flex-shrink-0 mt-0.5">
-                            <div class="w-8 h-8 {getNotificationIconColor(notification.type)} bg-opacity-10 rounded-lg flex items-center justify-center border border-current border-opacity-20">
-                              {@html getNotificationIcon(notification.type)}
+                            {@const mappedType = notification.type === 'overdue' ? 'error' : notification.type === 'due_reminder' ? 'warning' : notification.type === 'reservation_ready' || notification.type === 'return_confirmation' ? 'success' : 'info'}
+                            <div class="w-8 h-8 {getNotificationIconColor(mappedType)} bg-opacity-10 rounded-lg flex items-center justify-center border border-current border-opacity-20">
+                              {@html getNotificationIcon(mappedType)}
                             </div>
                           </div>
                           <div class="flex-1 min-w-0">
                             {#if notification.title}<h4 class="text-sm font-semibold text-slate-900 mb-0.5">{notification.title}</h4>{/if}
                             <p class="text-sm text-slate-600 leading-relaxed">{notification.message}</p>
-                            <div class="flex items-center justify-between mt-1.5">
-                              {#if notification.timestamp}<span class="text-xs text-slate-400">{formatTimestamp(notification.timestamp)}</span>{:else}<span></span>{/if}
-                              {#if notification.actionText && notification.actionUrl}
-                                <button on:click={() => handleNotificationAction(notification)} class="text-xs font-semibold text-[#0D5C29] hover:underline">{notification.actionText} →</button>
+                            <div class="mt-1.5 flex items-center justify-between gap-2">
+                              <span class="text-xs text-slate-400">{notification.sentAt ? formatTimestamp(new Date(notification.sentAt)) : 'Date unavailable'}</span>
+                              {#if !notification.isRead}
+                                <button on:click={() => markPersistedNotificationRead(notification.id)} class="text-xs font-semibold text-[#0D5C29] hover:underline">Mark read</button>
                               {/if}
                             </div>
                           </div>
-                          <button aria-label="Dismiss notification" on:click={() => notifications.remove(notification.id)} class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 rounded p-1 transition-all flex-shrink-0">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                          </button>
                         </div>
                       </div>
                     {/each}
@@ -659,6 +689,7 @@
 </div>
 
 <NotificationContainer />
+<ToastContainer />
 
 <style>
   @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }

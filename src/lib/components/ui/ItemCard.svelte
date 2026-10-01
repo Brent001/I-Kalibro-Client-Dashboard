@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { restrictedActions, type RestrictedAction } from '$lib/stores/restrictionStore.js';
+
 	import { FileText, X } from '@lucide/svelte';
 
 	/**
@@ -42,6 +44,7 @@
 	/** Another request somewhere on the page is in flight; block new ones. */
 	export let busy = false;
 	export let requestLabel = 'Request copy';
+	export let requestAction: RestrictedAction = 'reserve';
 
 	// Callbacks
 	export let onSelect: () => void = () => {};
@@ -51,7 +54,8 @@
 	type Tone = 'good' | 'warn' | 'muted';
 
 	$: unavailable = availableCopies === 0 && !isReserved && !isBorrowed;
-	$: requestDisabled = busy || (unavailable && !allowUnavailableRequest);
+	$: requestRestricted = $restrictedActions[requestAction];
+	$: requestDisabled = busy || requestRestricted || (unavailable && !allowUnavailableRequest);
 	$: stockLevel =
 		availableCopies > lowStockThreshold ? 'Available' : availableCopies > 0 ? 'Limited' : 'Unavailable';
 	$: statusLabel = statusText ?? (isBorrowed ? 'Borrowed' : isReserved ? 'Reserved' : stockLevel);
@@ -124,8 +128,9 @@
 					class:is-unavailable={unavailable && !allowUnavailableRequest}
 					on:click={onRequest}
 					disabled={requestDisabled}
+					title={requestRestricted ? `Your account is restricted from ${requestAction === 'reserve' ? 'making reservations' : 'borrowing items'}` : undefined}
 				>
-					{requesting ? 'Sending...' : unavailable && !allowUnavailableRequest ? 'Unavailable' : requestLabel}
+					{requesting ? 'Sending...' : requestRestricted ? 'Restricted' : unavailable && !allowUnavailableRequest ? 'Unavailable' : requestLabel}
 				</button>
 			{/if}
 		</div>{/if}
