@@ -25,6 +25,7 @@ export const GET: RequestHandler = async ({ request, cookies }) => {
   const [books, journals, magazines, theses] = await Promise.all([
     db.select({
       id: tbl_book_borrowing.id,
+      itemId: tbl_book.id,
       catalogId: tbl_book.bookId,
       title: tbl_book.title,
       author: tbl_book.author,
@@ -43,6 +44,7 @@ export const GET: RequestHandler = async ({ request, cookies }) => {
       .limit(100),
     db.select({
       id: tbl_journal_borrowing.id,
+      itemId: tbl_journal.id,
       catalogId: tbl_journal.journalId,
       title: tbl_journal.title,
       author: tbl_journal.publisher,
@@ -61,6 +63,7 @@ export const GET: RequestHandler = async ({ request, cookies }) => {
       .limit(100),
     db.select({
       id: tbl_magazine_borrowing.id,
+      itemId: tbl_magazine.id,
       catalogId: tbl_magazine.magazineId,
       title: tbl_magazine.title,
       author: tbl_magazine.publisher,
@@ -79,6 +82,7 @@ export const GET: RequestHandler = async ({ request, cookies }) => {
       .limit(100),
     db.select({
       id: tbl_thesis_borrowing.id,
+      itemId: tbl_thesis.id,
       catalogId: tbl_thesis.thesisId,
       title: tbl_thesis.title,
       author: tbl_thesis.author,

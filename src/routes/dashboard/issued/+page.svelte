@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
 
   export let data;
   const currentUser = data.user;
@@ -7,6 +7,7 @@
   interface Transaction {
     id: number;
     bookId: number;
+    itemId?: number;
     bookTitle: string;
     bookAuthor: string;
     dueDate?: string;
@@ -23,6 +24,8 @@
   let loading = false;
   let error = "";
   let isDesktop = false;
+  let focusItemId: number | null = null;
+  let focusItemType = '';
 
   let borrowedBooks: Transaction[] = [];
   let reservedBooks: Transaction[] = [];
@@ -80,6 +83,7 @@
 
       const normalizeBorrow = (b: any): Transaction => ({
         id: b.id,
+        itemId: b.itemId ?? b.bookId,
         bookId: b.bookId ?? b.itemId ?? b.book_id ?? b.item_id,
         bookTitle: b.bookTitle ?? b.title ?? b.name ?? '',
         bookAuthor: b.bookAuthor ?? b.author ?? b.publisher ?? '',
@@ -91,6 +95,7 @@
 
       const normalizeReserve = (r: any): Transaction => ({
         id: r.id,
+        itemId: r.itemId ?? r.bookId,
         bookId: r.bookId ?? r.itemId ?? r.book_id ?? r.item_id,
         bookTitle: r.bookTitle ?? r.title ?? r.name ?? '',
         bookAuthor: r.bookAuthor ?? r.author ?? r.publisher ?? '',
@@ -156,7 +161,19 @@
   onMount(() => {
     checkWidth();
     window.addEventListener('resize', checkWidth);
-    fetchIssuedBooks();
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab === 'all' || tab === 'borrowed' || tab === 'reserved' || tab === 'overdue') activeTab = tab;
+    const itemId = Number(params.get('focusItemId'));
+    focusItemId = Number.isInteger(itemId) && itemId > 0 ? itemId : null;
+    focusItemType = (params.get('focusItemType') || '').toLowerCase();
+    void (async () => {
+      await fetchIssuedBooks();
+      if (focusItemId === null) return;
+      await tick();
+      document.querySelector(`[data-item-id="${focusItemId}"]${focusItemType ? `[data-item-type="${focusItemType}"]` : ''}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    })();
   });
 
   onDestroy(() => {
@@ -299,7 +316,7 @@
             <tbody class="divide-y divide-slate-50">
               {#each currentList as item (item.id)}
                 {@const rowType = getRowType(item as any)}
-                <tr class="hover:bg-slate-50 transition-colors">
+                <tr data-item-id={item.itemId} data-item-type={item.itemType?.toLowerCase()} class="transition-colors hover:bg-slate-50 {focusItemId === item.itemId && (!focusItemType || focusItemType === item.itemType?.toLowerCase()) ? 'bg-amber-100 ring-2 ring-inset ring-amber-400' : ''}">
                   <td class="px-4 py-3">
                     <div class="flex items-center gap-2">
                       <span class="w-1.5 h-1.5 rounded-full shrink-0
@@ -357,7 +374,7 @@
           {#each currentList as item (item.id)}
             {@const rowType = getRowType(item as any)}
             {@const colors = spineColors[rowType]}
-            <div class="px-3 py-3 flex gap-3 items-start">
+            <div data-item-id={item.itemId} data-item-type={item.itemType?.toLowerCase()} class="flex items-start gap-3 px-3 py-3 {focusItemId === item.itemId && (!focusItemType || focusItemType === item.itemType?.toLowerCase()) ? 'bg-amber-50 ring-2 ring-inset ring-amber-400' : ''}">
 
               <!-- Book spine avatar -->
               <div

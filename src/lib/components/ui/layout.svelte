@@ -9,6 +9,7 @@
   import { notifications, persistedNotifications, notificationPreferences, loadNotificationPreferences, isNotificationEnabled } from "$lib/stores/notificationStore.js";
   import { userRestrictions } from "$lib/stores/restrictionStore.js";
   import { toast } from "$lib/stores/toastStore.js";
+  import { getNotificationDestination } from '$lib/utils/notificationNavigation.js';
   import {
     Bell,
     BookOpen,
@@ -285,8 +286,10 @@
     if (minutes < 1) return 'Just now'; if (minutes < 60) return `${minutes}m ago`; if (hours < 24) return `${hours}h ago`; return `${days}d ago`;
   }
 
-  function handleNotificationAction(notification: any) {
-    if (notification.actionUrl) { showNotificationPanel = false; window.location.href = notification.actionUrl; }
+  async function handleNotificationAction(notification: any) {
+    showNotificationPanel = false;
+    if (!notification.isRead) await markPersistedNotificationRead(notification.id);
+    await goto(notification.actionUrl || getNotificationDestination(notification));
   }
 
   async function markPersistedNotificationRead(notificationId?: number) {
@@ -577,24 +580,25 @@
                 {:else}
                   <div class="divide-y divide-slate-100">
                     {#each visiblePersistedNotifications as notification (notification.id)}
-                      <div class="p-4 hover:bg-[#F0FAF3] transition-colors group {notification.isRead ? 'opacity-70' : ''}">
+                      {@const mappedType = notification.type === 'overdue' ? 'error' : notification.type === 'due_reminder' ? 'warning' : notification.type === 'reservation_ready' || notification.type === 'return_confirmation' ? 'success' : 'info'}
+                      <div class="p-4 transition-colors group hover:bg-[#F0FAF3] {notification.isRead ? 'opacity-70' : ''}">
                         <div class="flex gap-3">
                           <div class="flex-shrink-0 mt-0.5">
-                            {@const mappedType = notification.type === 'overdue' ? 'error' : notification.type === 'due_reminder' ? 'warning' : notification.type === 'reservation_ready' || notification.type === 'return_confirmation' ? 'success' : 'info'}
                             <div class="w-8 h-8 {getNotificationIconColor(mappedType)} bg-opacity-10 rounded-lg flex items-center justify-center border border-current border-opacity-20">
                               {@html getNotificationIcon(mappedType)}
                             </div>
                           </div>
-                          <div class="flex-1 min-w-0">
+                          <button type="button" class="min-w-0 flex-1 text-left" on:click={() => handleNotificationAction(notification)}>
                             {#if notification.title}<h4 class="text-sm font-semibold text-slate-900 mb-0.5">{notification.title}</h4>{/if}
                             <p class="text-sm text-slate-600 leading-relaxed">{notification.message}</p>
                             <div class="mt-1.5 flex items-center justify-between gap-2">
                               <span class="text-xs text-slate-400">{notification.sentAt ? formatTimestamp(new Date(notification.sentAt)) : 'Date unavailable'}</span>
-                              {#if !notification.isRead}
-                                <button on:click={() => markPersistedNotificationRead(notification.id)} class="text-xs font-semibold text-[#0D5C29] hover:underline">Mark read</button>
-                              {/if}
+                              <span class="text-xs font-semibold text-[#0D5C29]">{notification.type === 'return_confirmation' ? 'View borrowing history' : 'View in My Library'}</span>
                             </div>
-                          </div>
+                          </button>
+                          {#if !notification.isRead}
+                            <button on:click={() => markPersistedNotificationRead(notification.id)} class="shrink-0 self-start text-xs font-semibold text-[#0D5C29] hover:underline">Mark read</button>
+                          {/if}
                         </div>
                       </div>
                     {/each}
