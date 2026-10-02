@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { History } from '@lucide/svelte';
+  import { tick } from 'svelte';
 
   interface HistoryEntry {
     id: number;
+    itemId: number;
     catalogId: string | null;
     title: string | null;
     author: string | null;
@@ -21,6 +23,8 @@
   let filter = 'all';
   let loading = true;
   let errorMessage = '';
+  let focusItemId: number | null = null;
+  let focusItemType = '';
 
   $: filteredHistory = history.filter((item) => {
     const query = searchTerm.trim().toLowerCase();
@@ -60,7 +64,17 @@
   }
 
   onMount(() => {
-    void loadHistory();
+    const params = new URLSearchParams(window.location.search);
+    const itemId = Number(params.get('focusItemId'));
+    focusItemId = Number.isInteger(itemId) && itemId > 0 ? itemId : null;
+    focusItemType = (params.get('focusItemType') || '').toLowerCase();
+    void (async () => {
+      await loadHistory();
+      if (focusItemId === null) return;
+      await tick();
+      document.querySelector(`[data-item-id="${focusItemId}"]${focusItemType ? `[data-item-type="${focusItemType}"]` : ''}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    })();
   });
 </script>
 
@@ -91,7 +105,7 @@
           <thead><tr style="background:#EDE4D4;border-bottom:1.5px solid #D4C4A8;"><th class="px-3 py-3.5 text-xs font-bold uppercase tracking-widest sm:px-5" style="color:#7A5A2A;">Item</th><th class="px-3 py-3.5 text-xs font-bold uppercase tracking-widest sm:px-5" style="color:#7A5A2A;">Type / ID</th><th class="px-3 py-3.5 text-xs font-bold uppercase tracking-widest sm:px-5" style="color:#7A5A2A;">Borrowed</th><th class="px-3 py-3.5 text-xs font-bold uppercase tracking-widest sm:px-5" style="color:#7A5A2A;">Due</th><th class="px-3 py-3.5 text-xs font-bold uppercase tracking-widest sm:px-5" style="color:#7A5A2A;">Returned</th><th class="px-3 py-3.5 text-xs font-bold uppercase tracking-widest sm:px-5" style="color:#7A5A2A;">Status</th></tr></thead>
           <tbody>
             {#each filteredHistory as item (`${item.itemType}-${item.id}`)}
-              <tr style="border-bottom:1px solid #EDE4D4;background:#FDF8F0;">
+              <tr data-item-id={item.itemId} data-item-type={item.itemType.toLowerCase()} class={focusItemId === item.itemId && (!focusItemType || focusItemType === item.itemType.toLowerCase()) ? 'ring-2 ring-inset ring-amber-400' : ''} style="border-bottom:1px solid #EDE4D4;background:{focusItemId === item.itemId && (!focusItemType || focusItemType === item.itemType.toLowerCase()) ? '#FEF3C7' : '#FDF8F0'};">
                 <td class="px-3 py-3.5 sm:px-5"><div class="font-bold" style="color:#1A3A1A;">{item.title || 'Catalog item'}</div><div class="mt-0.5 text-xs" style="color:#9A7A5A;">{item.author || 'Contributor not listed'}{#if item.copyNumber} · Copy {item.copyNumber}{/if}</div></td>
                 <td class="px-3 py-3.5 capitalize sm:px-5"><div>{item.itemType === 'thesis' ? 'Research' : item.itemType}</div><div class="mt-0.5 font-mono text-xs" style="color:#B06A00;">{item.catalogId || '—'}</div></td>
                 <td class="px-3 py-3.5 sm:px-5">{formatDate(item.borrowDate)}</td>

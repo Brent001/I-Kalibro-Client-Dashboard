@@ -43,7 +43,8 @@ async function checkRateLimit(identifier: string): Promise<boolean> {
   return true;
 }
 
-const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
+const resendApiKey = env.RESEND_API_KEY || env.VITE_RESEND_API_KEY;
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 function buildOTPEmail(otp: string): string {
   return `<!DOCTYPE html>
@@ -296,12 +297,21 @@ export const POST: RequestHandler = async ({ request }) => {
 
     // Send email
     try {
-      await resend.emails.send({
+      const { error: sendError } = await resend.emails.send({
         from: 'e-Kalibro Registration <register@i-kalibro.online>',
         to: normalizedEmail,
         subject: `${otp} is your e-Kalibro verification code`,
         html: buildOTPEmail(otp),
       });
+
+      if (sendError) {
+        console.error('Registration OTP email delivery failed:', sendError);
+        await redisClient.del(key);
+        return json(
+          { success: false, message: 'Failed to send verification email. Please try again later.' },
+          { status: 502 }
+        );
+      }
 
       return json({
         success: true,
@@ -310,6 +320,7 @@ export const POST: RequestHandler = async ({ request }) => {
         maskedEmail: maskedEmail
       });
     } catch (emailError) {
+      console.error('Registration OTP email request failed:', emailError);
       await redisClient.del(key);
       return json(
         { success: false, message: 'Failed to send email. Please try again later.' },

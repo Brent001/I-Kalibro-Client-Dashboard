@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { Bell, RefreshCw } from '@lucide/svelte';
+  import { goto } from '$app/navigation';
+  import { getNotificationDestination } from '$lib/utils/notificationNavigation.js';
   import {
     defaultNotificationPreferences,
     isNotificationEnabled,
@@ -88,6 +90,11 @@
     }
   }
 
+  async function openNotification(notification: Notification) {
+    if (!notification.isRead) await markRead(notification.id);
+    await goto(getNotificationDestination(notification));
+  }
+
   function formatTimestamp(value: string | null) {
     if (!value) return 'Date unavailable';
     const date = new Date(value);
@@ -118,7 +125,7 @@
 <main class="w-full space-y-2 text-sm" style="color:#2C1A0E;">
   <header class="relative overflow-hidden rounded-xl border px-3 py-3 shadow-sm sm:px-5 sm:py-3.5" style="background:linear-gradient(135deg,#3A6B3A 0%,#0D5C29 50%,#1A4D1A 100%);border-color:#1A4D1A;">
     <div class="pointer-events-none absolute inset-0 opacity-10" style="background-image:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.05) 10px,rgba(255,255,255,.05) 11px);"></div>
-    <div class="relative z-10 flex flex-wrap items-center justify-between gap-3"><div class="flex items-center gap-3"><div class="flex h-11 w-11 items-center justify-center rounded-lg border-2" style="background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);"><Bell class="h-5 w-5 text-white" strokeWidth={1.5} aria-hidden="true" /></div><div><h1 class="text-lg font-bold leading-tight text-[#F5F0E8] sm:text-xl">Notifications</h1><p class="mt-0.5 hidden text-xs text-white/70 sm:block sm:text-sm">{unreadCount} unread account updates</p></div></div><div class="flex items-center gap-2"><button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg border text-[#F5F0E8] transition-colors hover:bg-white/10 disabled:opacity-50" style="border-color:rgba(255,255,255,.35);" aria-label="Refresh notifications" title="Refresh notifications" disabled={loading} on:click={() => loadNotifications()}><RefreshCw class="h-4 w-4" aria-hidden="true" /></button><button class="rounded-lg border px-3 py-2 text-xs font-bold text-[#F5F0E8] disabled:opacity-50" style="border-color:rgba(255,255,255,.35);" disabled={saving || unreadCount === 0} on:click={() => markRead()}>Mark all read</button></div></div>
+    <div class="relative z-10 flex flex-wrap items-center justify-between gap-3"><div class="flex items-center gap-3"><div class="flex h-11 w-11 items-center justify-center rounded-lg border-2" style="background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.3);"><Bell class="h-5 w-5 text-white" strokeWidth={1.5} aria-hidden="true" /></div><div><h1 class="text-lg font-bold leading-tight text-[#F5F0E8] sm:text-xl">Notifications</h1><p class="mt-0.5 hidden text-xs text-white/70 sm:block sm:text-sm">{unreadCount} unread account updates</p></div></div><div class="flex items-center gap-2"><button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg border text-[#F5F0E8] transition-colors hover:bg-white/10 disabled:opacity-50" style="border-color:rgba(255,255,255,.35);" aria-label="Refresh notifications" title="Refresh notifications" disabled={loading} onclick={() => loadNotifications()}><RefreshCw class="h-4 w-4" aria-hidden="true" /></button><button class="rounded-lg border px-3 py-2 text-xs font-bold text-[#F5F0E8] disabled:opacity-50" style="border-color:rgba(255,255,255,.35);" disabled={saving || unreadCount === 0} onclick={() => markRead()}>Mark all read</button></div></div>
   </header>
 
   <section class="rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm sm:px-4">
@@ -142,7 +149,7 @@
             <input
               type="checkbox"
               checked={$notificationPreferences[option.key]}
-              on:change={(event) => updatePreference(option.key, event.currentTarget.checked)}
+              onchange={(event) => updatePreference(option.key, event.currentTarget.checked)}
               class="h-4 w-4 rounded border-slate-300 text-[#0D5C29] focus:ring-[#0D5C29]"
               aria-label={`Show ${option.label.toLowerCase()}`}
             />
@@ -156,7 +163,7 @@
     {#if errorMessage}
       <div class="mb-1 flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-sm" style="background:#F5E6E6;border-color:#D4A0A0;color:#7A1A1A;" role="alert">
         <span>{errorMessage}</span>
-        <button class="font-semibold underline" on:click={() => loadNotifications()}>Retry</button>
+        <button class="font-semibold underline" onclick={() => loadNotifications()}>Retry</button>
       </div>
     {/if}
 
@@ -173,24 +180,19 @@
         {#each visibleNotifications as notification (notification.id)}
           <li class="flex gap-3 border-b px-3 py-4 last:border-0 sm:px-5 {notification.isRead ? 'opacity-70' : ''}" style="background:{notification.isRead ? '#F5F0E8' : '#FDF8F0'};border-color:#EDE4D4;">
             <span class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style="background:{notification.isRead ? '#C4B8A8' : '#B06A00'};" aria-label={notification.isRead ? 'Read' : 'Unread'}></span>
-            <div class="min-w-0 flex-1">
+            <button type="button" class="min-w-0 flex-1 text-left" onclick={() => openNotification(notification)}>
               <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                 <h2 class="font-bold" style="color:#1A3A1A;">{notification.title}</h2>
                 <time class="text-xs" style="color:#9A7A5A;">{formatTimestamp(notification.sentAt)}</time>
               </div>
               <p class="mt-1 whitespace-pre-line text-sm leading-6" style="color:#5A4A3A;">{notification.message}</p>
-              {#if notification.type === 'due_reminder' || notification.type === 'overdue'}
-                <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold">
-                  <a href="/dashboard/issued" class="underline underline-offset-2" style="color:#0D5C29;">View my items</a>
-                  <a href="/dashboard/fines" class="underline underline-offset-2" style="color:#0D5C29;">Check fine status</a>
-                </div>
-              {/if}
               {#if notification.relatedItemType}
                 <p class="mt-2 text-xs font-bold uppercase tracking-wide" style="color:#9A7A5A;">{notification.relatedItemType}{#if notification.relatedItemId} · #{notification.relatedItemId}{/if}</p>
               {/if}
-            </div>
+              <span class="mt-2 block text-xs font-bold underline underline-offset-2" style="color:#0D5C29;">{notification.type === 'return_confirmation' ? 'View borrowing history' : notification.type === 'overdue' ? 'View overdue item' : notification.type === 'due_reminder' ? 'View borrowed item' : 'View in My Library'}</span>
+            </button>
             {#if !notification.isRead}
-              <button class="shrink-0 self-start text-xs font-bold underline underline-offset-4 disabled:opacity-50" style="color:#0D5C29;" disabled={saving} on:click={() => markRead(notification.id)}>Mark read</button>
+              <button class="shrink-0 self-start text-xs font-bold underline underline-offset-4 disabled:opacity-50" style="color:#0D5C29;" disabled={saving} onclick={() => markRead(notification.id)}>Mark read</button>
             {/if}
           </li>
         {/each}
